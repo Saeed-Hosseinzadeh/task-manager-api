@@ -1,0 +1,24 @@
+### Register User
+POST http://127.0.0.1:8000/register
+Content-Type: application/json
+
+{
+  "username": "ali",
+  "name": "Ali Reza",
+  "email": "ali@test.com",
+  "password": "Password123"
+}
+
+
+### Create Task
+POST http://127.0.0.1:8000/tasks?user_id=1
+Content-Type: application/json
+
+{
+  "title": "Learn FastAPI",
+  "description": "Practice building APIs"
+}
+
+
+### Get Tasks
+GET http://127.0.0.1:8000/tasks?user_id=1
