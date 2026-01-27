@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:14
+    container_name: taskmanager_db
+    restart: always
+    environment:
+      POSTGRES_USER: fastapi_user
+      POSTGRES_PASSWORD: strongpassword
+      POSTGRES_DB: taskmanager_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: taskmanager_api
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /code
+
+volumes:
+  postgres_data:
