@@ -1,20 +1,40 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from collections.abc import Generator
+
 from app.core.config import settings
 
-# استفاده از DATABASE_URL که در فایل .env تعریف کردی
-SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
-# برای PostgreSQL نیاز به آن connect_args نداریم
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Database URL loaded from environment variables
+SQLALCHEMY_DATABASE_URL: str = settings.DATABASE_URL
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Create SQLAlchemy engine
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,   # Prevents stale connections
+    future=True           # Enables SQLAlchemy 2.0 style usage
+)
+
+
+# Session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+
+# Base class for models
 Base = declarative_base()
 
-# Dependency برای استفاده در مسیرها
-def get_db():
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency that provides a database session.
+    Ensures proper opening and closing of the session.
+    """
+
     db = SessionLocal()
     try:
         yield db
