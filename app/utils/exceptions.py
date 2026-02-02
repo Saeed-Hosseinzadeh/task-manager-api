@@ -1,3 +1,8 @@
+"""
+Global Exception Handlers for FastAPI.
+Standardizes error responses and logs issues across the application.
+"""
+
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -8,79 +13,86 @@ from .response import error_response
 from .logger import logger
 
 
-# ----------------------------
-# Handle HTTP Exceptions
-# ----------------------------
-async def http_exception_handler(_request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """
+    Handle Starlette/FastAPI HTTP exceptions.
+
+    Args:
+        _request: The incoming HTTP request (unused).
+        exc: The exception instance containing detail and status code.
+
+    Returns:
+        JSONResponse: Standardized error format with specific status code.
+    """
     logger.warning(f"HTTP error: {exc.detail}")
 
     return JSONResponse(
         status_code=exc.status_code,
-        content=error_response(
-            message=str(exc.detail),
-            status_code=exc.status_code
-        )
+        content=error_response(message=str(exc.detail))  # Fixed: removed status_code
     )
 
 
-# ----------------------------
-# Handle Validation Errors
-# ----------------------------
-async def validation_exception_handler(_request: Request, exc: RequestValidationError):
-    logger.warning(f"Validation error: {exc.errors()}")
+async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    """
+    Handle Pydantic validation errors (422 Unprocessable Entity).
 
-    cleaned_errors = []
+    Args:
+        _request: The incoming HTTP request (unused).
+        exc: The validation error details.
 
-    for err in exc.errors():
-        err_copy = err.copy()
-        ctx = err_copy.get("ctx")
+    Returns:
+        JSONResponse: Standardized error format with list of validation issues.
+    """
+    # Extract field name and message from Pydantic errors
+    cleaned_errors = [
+        {"field": " -> ".join(map(str, err["loc"][1:])), "message": err["msg"]}
+        for err in exc.errors()
+    ]
 
-        if ctx:
-            cleaned_ctx = {}
-            for key, value in ctx.items():
-                if isinstance(value, Exception):
-                    cleaned_ctx[key] = str(value)
-                else:
-                    cleaned_ctx[key] = value
-            err_copy["ctx"] = cleaned_ctx
-
-        cleaned_errors.append(err_copy)
+    logger.warning(f"Validation error: {cleaned_errors}")
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=error_response(
-            message="Invalid input data",
-            data=cleaned_errors,
-            status_code=422
+            message="Input validation failed",
+            data=cleaned_errors
         )
     )
 
 
-# ----------------------------
-# Handle Database Errors
-# ----------------------------
-async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError):
-    logger.error(f"Database error: {str(exc)}")
+async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    """
+    Handle SQLAlchemy database related errors.
+
+    Args:
+        _request: The incoming HTTP request (unused).
+        exc: The database exception.
+
+    Returns:
+        JSONResponse: 500 Internal Server Error with a safe message.
+    """
+    logger.error(f"Database error: {str(exc)}")  # Log the full error for debugging
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response(
-            message="Database error occurred",
-            status_code=500
-        )
+        content=error_response(message="A database error occurred")
     )
 
 
-# ----------------------------
-# Handle Unexpected Server Errors (500)
-# ----------------------------
-async def general_exception_handler(_request: Request, exc: Exception):
-    logger.error(f"Unexpected error: {str(exc)}")
+async def general_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """
+    Catch-all handler for any unexpected server errors.
+
+    Args:
+        _request: The incoming HTTP request (unused).
+        exc: The unhandled exception.
+
+    Returns:
+        JSONResponse: 500 Internal Server Error with a generic message.
+    """
+    logger.error(f"Unexpected system error: {str(exc)}")
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response(
-            message="Internal server error",
-            status_code=500
-        )
+        content=error_response(message="An unexpected server error occurred")
     )

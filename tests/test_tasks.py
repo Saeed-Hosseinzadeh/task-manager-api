@@ -1,6 +1,14 @@
-def test_create_task(client):
+def test_create_task(client) -> None:
+    """
+    Test authenticated user can create a new task successfully.
 
-    login = client.post(
+    Args:
+        client: FastAPI test client fixture.
+
+    Returns:
+        None
+    """
+    login_response = client.post(
         "/auth/login",
         json={
             "identifier": "test@example.com",
@@ -8,12 +16,12 @@ def test_create_task(client):
         }
     )
 
-    assert login.status_code == 200
+    assert login_response.status_code == 200, "Login request failed."
 
-    token = login.json()["data"]["access_token"]
+    token = login_response.json()["data"]["access_token"]
 
-    response = client.post(
-        "/tasks",   # اگر prefix فقط در main.py باشد
+    create_response = client.post(
+        "/tasks",
         json={
             "title": "Test Task",
             "description": "testing task"
@@ -23,9 +31,11 @@ def test_create_task(client):
         }
     )
 
-    assert response.status_code == 201
+    assert create_response.status_code == 201, "Task creation failed."
 
-    data = response.json()
+    response_data = create_response.json()
 
-    assert data["success"] is True
-    assert data["data"]["title"] == "Test Task"
+    assert response_data["success"] is True
+    assert response_data["message"] is not None
+    assert response_data["data"]["title"] == "Test Task"
+    assert response_data["data"]["description"] == "testing task"

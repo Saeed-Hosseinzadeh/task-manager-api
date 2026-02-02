@@ -1,33 +1,58 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:14
     container_name: taskmanager_db
     restart: always
+
     environment:
       POSTGRES_USER: fastapi_user
       POSTGRES_PASSWORD: strongpassword
       POSTGRES_DB: taskmanager_db
-    ports:
-      - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      # Check if PostgreSQL is ready to accept connections
+      test: ["CMD-SHELL", "pg_isready -U fastapi_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
     container_name: taskmanager_api
+    restart: always
+
     command: >
-      sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000"
-    volumes:
-      - .:/code
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+
     ports:
       - "8000:8000"
+
     depends_on:
-      - db
+      db:
+        condition: service_healthy  # Wait for DB readiness
+
     env_file:
       - .env
+
     environment:
       PYTHONPATH: /code
+
+    volumes:
+      - .:/code  # Use only in development
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
