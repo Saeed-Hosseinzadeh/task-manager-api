@@ -8,7 +8,6 @@ on:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
 
     services:
@@ -27,7 +26,12 @@ jobs:
           --health-retries=5
 
     env:
+      # تنظیمات محیطی مطابق با config.py
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      SECRET_KEY: supersecretkey
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
 
     steps:
       - name: Checkout repository
@@ -41,13 +45,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run database migrations
         run: |
-          alembic upgrade head
+          python -m alembic upgrade head
 
       - name: Run tests
         run: |
-          pytest -v
+          python -m pytest -v
