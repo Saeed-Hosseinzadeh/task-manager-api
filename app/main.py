@@ -1,86 +1,96 @@
 """
-Main application entry point for the Task Manager API.
+Main Application Entry Point
 
-This module initializes the FastAPI application, registers global exception
-handlers, and includes all application routers.
+This module initializes the FastAPI application and registers all routers
+used by the API.
+
+Routers are mounted here with prefixes to keep route management centralized
+and prevent duplication.
+
+The module also exposes a lightweight health-check endpoint that can be used
+by CI/CD pipelines, monitoring tools, Docker health checks, and automated tests
+to verify that the FastAPI application is running correctly.
 """
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.config import settings
-from app.routers import auth, tasks
-from app.utils.exceptions import (
-    http_exception_handler,
-    validation_exception_handler,
-    sqlalchemy_exception_handler,
-    general_exception_handler
-)
-from app.utils.response import success_response
-from app.utils.logger import logger
+# Import API routers
+from app.routers import auth
+from app.routers import tasks
 
 
-# ---------------------------------------------------------
-# FastAPI Application Initialization
-# ---------------------------------------------------------
-app: FastAPI = FastAPI(
-    title=settings.PROJECT_NAME,
-    description="A professional Task Management API with authentication and CRUD operations.",
+# Create FastAPI application instance
+app = FastAPI(
+    title="Task Manager API",
     version="1.0.0",
-    swagger_ui_parameters={
-        "docExpansion": "list",
-        "persistAuthorization": True  # Keeps JWT token after page refresh
-    }
+    description="A simple task management API with authentication support."
 )
 
 
 # ---------------------------------------------------------
-# Application Startup Event
+# Health Check Route
 # ---------------------------------------------------------
-@app.on_event("startup")
-async def startup_event() -> None:
+# This endpoint is intentionally simple and does not require
+# authentication or database access.
+#
+# It is useful for:
+# - GitHub Actions CI checks
+# - Docker/container health checks
+# - Load balancer health checks
+# - Basic API availability checks
+#
+# Example:
+# GET /health
+# Response:
+# {
+#     "status": "ok"
+# }
+# ---------------------------------------------------------
+@app.get("/health", tags=["Health"])
+def health_check():
     """
-    Executes when the application starts.
+    Check whether the API application is running.
 
-    Used for logging system startup or initializing services.
-    """
-    logger.info("Task Manager API started successfully")
-
-
-# ---------------------------------------------------------
-# Exception Handlers Registration
-# ---------------------------------------------------------
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
-
-
-# ---------------------------------------------------------
-# Routers Registration
-# ---------------------------------------------------------
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
-
-
-# ---------------------------------------------------------
-# Root Endpoint
-# ---------------------------------------------------------
-@app.get("/", tags=["Root"])
-async def root() -> dict:
-    """
-    Root endpoint used to verify API availability.
+    This endpoint returns a simple success response when the FastAPI
+    application is available. It does not check database connectivity
+    because its main purpose is to confirm that the application itself
+    has started successfully.
 
     Returns:
-        dict: Standard API response containing project metadata.
+        dict: A dictionary containing the application health status.
     """
-    return success_response(
-        data={
-            "project": settings.PROJECT_NAME,
-            "status": "online",
-            "docs": "/docs"
-        },
-        message="API is running"
-    )
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------
+# Authentication Routes
+# ---------------------------------------------------------
+# All authentication routes will start with /auth
+#
+# Example:
+# POST /auth/register
+# POST /auth/login
+# POST /auth/refresh
+# ---------------------------------------------------------
+app.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Authentication"]
+)
+
+
+# ---------------------------------------------------------
+# Task Routes
+# ---------------------------------------------------------
+# Example routes:
+#
+# GET    /tasks
+# POST   /tasks
+# PUT    /tasks/{id}
+# DELETE /tasks/{id}
+# ---------------------------------------------------------
+app.include_router(
+    tasks.router,
+    prefix="/tasks",
+    tags=["Tasks"]
+)
