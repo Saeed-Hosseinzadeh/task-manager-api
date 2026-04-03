@@ -19,14 +19,17 @@ def hash_password(password: str) -> str:
     """
     Hash a plain password using bcrypt.
     """
-    return pwd_context.hash(password[:72])
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("password cannot be longer than 72 bytes")
+    return pwd_context.hash(password)
+
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """
-    Verify a plain password against its hashed version.
-    """
+    if len(password.encode("utf-8")) > 72:
+        return False
     return pwd_context.verify(password, hashed)
+
 
 
 # =========================
