@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -20,7 +20,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
     return pwd_context.verify(password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
 
     if expires_delta:
@@ -32,16 +32,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
     to_encode.update({"exp": expire, "type": "access"})
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM,
+        algorithm=settings.ALGORITHM
     )
 
-    return encoded_jwt
 
-
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: Dict[str, Any]) -> str:
     to_encode = data.copy()
 
     expire = datetime.utcnow() + timedelta(
@@ -50,10 +48,20 @@ def create_refresh_token(data: dict) -> str:
 
     to_encode.update({"exp": expire, "type": "refresh"})
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM,
+        algorithm=settings.ALGORITHM
     )
 
-    return encoded_jwt
+
+def decode_token(token: str) -> Optional[Dict[str, Any]]:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        return payload
+    except JWTError:
+        return None
