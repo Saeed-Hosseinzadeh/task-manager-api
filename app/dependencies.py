@@ -1,3 +1,10 @@
+"""
+Dependencies
+
+This module provides reusable FastAPI dependencies, including authentication
+mechanisms and database session management.
+"""
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -7,6 +14,7 @@ from app.core.config import settings
 from .database import get_db
 from .models import User
 
+# OAuth2 scheme for token-based authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
@@ -17,11 +25,15 @@ def get_current_user(
     """
     Dependency that extracts the current authenticated user from a JWT token.
 
-    Steps:
-    1. Decode JWT token
-    2. Extract user ID from payload
-    3. Retrieve user from database
-    4. Return the authenticated user
+    Args:
+        token (str): The JWT token extracted from the Authorization header.
+        db (Session): The SQLAlchemy database session.
+
+    Returns:
+        User: The authenticated User model object.
+
+    Raises:
+        HTTPException: If credentials are invalid, expired, or the user does not exist.
     """
 
     credentials_exception = HTTPException(
@@ -30,12 +42,14 @@ def get_current_user(
     )
 
     try:
+        # Decode the JWT token using the configured secret and algorithm
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
 
+        # Extract subject (user ID) from token payload
         user_id: str | None = payload.get("sub")
 
         if user_id is None:
@@ -46,6 +60,7 @@ def get_current_user(
     except (JWTError, ValueError):
         raise credentials_exception
 
+    # Retrieve user from the database
     user = db.query(User).filter(User.id == user_id).first()
 
     if user is None:

@@ -1,14 +1,43 @@
+"""
+Task API Tests
+
+This module contains integration tests for task-related API endpoints.
+The tests validate that authenticated users can perform operations
+on task resources through the public API.
+
+Testing Focus
+-------------
+- Authentication flow required for protected endpoints
+- Task creation via `/tasks`
+- Validation of API response structure and returned task data
+
+The tests rely on the FastAPI TestClient and the isolated testing
+database environment configured by pytest fixtures.
+"""
+
+
 def test_create_task(client) -> None:
     """
-    Test authenticated user can create a new task successfully.
+    Verify that an authenticated user can successfully create a task.
 
-    Args:
-        client: FastAPI test client fixture.
+    Test Flow
+    ---------
+    1. Register a new user to ensure the account exists in the test database.
+    2. Authenticate the user and retrieve the access token.
+    3. Send a request to create a new task using the Authorization header.
+    4. Validate the API response structure and returned task data.
 
-    Returns:
-        None
+    Parameters
+    ----------
+    client : TestClient
+        FastAPI test client fixture configured with the testing database.
+
+    Returns
+    -------
+    None
     """
-    # 1. اول کاربر را ثبت‌نام می‌کنیم تا در دیتابیسِ این تست وجود داشته باشد
+
+    # Step 1: Register a user account required for authentication
     client.post(
         "/auth/register",
         json={
@@ -18,7 +47,7 @@ def test_create_task(client) -> None:
         }
     )
 
-    # 2. حالا لاگین می‌کنیم
+    # Step 2: Authenticate the user to obtain an access token
     login_response = client.post(
         "/auth/login",
         json={
@@ -29,11 +58,11 @@ def test_create_task(client) -> None:
 
     assert login_response.status_code == 200, "Login request failed."
 
-    # از آنجایی که پاسخ‌ها را در wrapper (success_response) قرار می‌دهیم،
-    # توکن باید از داخل فیلد data خوانده شود
+    # The API responses are wrapped using a standardized success response format.
+    # The authentication token is retrieved from the `data` field.
     token = login_response.json()["data"]["access_token"]
 
-    # 3. ساخت تسک با هدر Authorization
+    # Step 3: Create a new task using the Authorization header
     create_response = client.post(
         "/tasks",
         json={
@@ -49,7 +78,7 @@ def test_create_task(client) -> None:
 
     response_data = create_response.json()
 
-    # 4. چک کردن پاسخ
+    # Step 4: Validate the response payload
     assert response_data["success"] is True
     assert response_data["message"] is not None
     assert response_data["data"]["title"] == "Test Task"

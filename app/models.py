@@ -1,3 +1,10 @@
+"""
+Database Models
+
+This module defines the SQLAlchemy models for the application, establishing the
+relational data structure for Users and their associated Tasks.
+"""
+
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -6,7 +13,14 @@ from .database import Base
 
 class User(Base):
     """
-    SQLAlchemy model representing a registered user in the system.
+    User model representing a registered user in the system.
+
+    Attributes:
+        id (int): Primary key for the user.
+        username (str): Unique username for authentication.
+        email (str): Unique email address of the user.
+        hashed_password (str): Securely hashed password.
+        tasks (relationship): Relationship to Task models owned by this user.
     """
     __tablename__ = "users"
 
@@ -19,12 +33,24 @@ class User(Base):
     tasks = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
+        """Returns a string representation of the User object."""
         return f"<User(username={self.username}, email={self.email})>"
 
 
 class Task(Base):
     """
-    SQLAlchemy model representing a task created by a user.
+    Task model representing a task created by a user.
+
+    Attributes:
+        id (int): Primary key for the task.
+        title (str): The title of the task.
+        description (str): Detailed description of the task.
+        is_completed (bool): Completion status of the task.
+        priority (int): Priority level (1: Low, 2: Medium, 3: High).
+        created_at (datetime): Timestamp when the task was created.
+        due_date (datetime): Deadline for the task.
+        owner_id (int): Foreign key referencing the user who owns the task.
+        owner (relationship): The User object associated with this task.
     """
     __tablename__ = "tasks"
 
@@ -45,4 +71,5 @@ class Task(Base):
     owner = relationship("User", back_populates="tasks")
 
     def __repr__(self) -> str:
+        """Returns a string representation of the Task object."""
         return f"<Task(title={self.title}, is_completed={self.is_completed})>"

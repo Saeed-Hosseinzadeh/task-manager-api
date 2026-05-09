@@ -1,61 +1,73 @@
 """
 Tasks Router
 
-This module defines task-related API endpoints.
+This module defines the HTTP API endpoints responsible for task
+management operations.
 
-Endpoints included:
-- Create a new task
-- Retrieve a list of tasks
-- Retrieve a specific task
-- Update an existing task
-- Delete a task
+Responsibilities
+----------------
+- Task creation
+- Task retrieval (single and multiple)
+- Task update
+- Task deletion
 
-Important
----------
-The '/tasks' prefix is NOT defined in this router.
+Architecture
+------------
+This router acts as the API layer and delegates all business logic
+to the task service layer. It remains intentionally lightweight and
+focuses only on:
 
-The prefix is applied in the main application when this router
-is included using:
+- Request validation
+- Dependency injection
+- Delegation to services
+- Response formatting
+
+Router Prefix
+-------------
+The '/tasks' prefix is intentionally NOT defined inside this router.
+
+The prefix must be applied when including the router in the FastAPI
+application instance:
 
     app.include_router(tasks.router, prefix="/tasks")
 
-This prevents route duplication such as:
+This prevents duplicate routes such as:
 
     /tasks/tasks/
 
-Expected final routes:
-- POST /tasks/
-- GET /tasks/
-- GET /tasks/{task_id}
-- PATCH /tasks/{task_id}
-- DELETE /tasks/{task_id}
+Expected Final Endpoints
+------------------------
+POST    /tasks/
+GET     /tasks/
+GET     /tasks/{task_id}
+PATCH   /tasks/{task_id}
+DELETE  /tasks/{task_id}
 """
 
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 
-# Import database dependency
+# Database dependency used to provide a SQLAlchemy session.
 from app.database import get_db
 
-# Import authentication dependency
+# Authentication dependency that injects the current authenticated user.
 from app.dependencies import get_current_user
 
-# Import request and response schemas
+# Request and response schemas used for validation and serialization.
 from app.schemas import TaskCreate, TaskUpdate, TaskResponse
 
-# Import task service layer
+# Service layer responsible for task business logic.
 from app.services import task_service
 
-# Import standard API response helper
+# Utility for creating standardized API responses.
 from app.utils.response import success_response
 
-# Import User model for typing the authenticated user
+# User model used for typing the authenticated user dependency.
 from app.models import User
 
 
-# Create tasks router.
-# Do NOT add prefix="/tasks" here.
-# The /tasks prefix is added in app/main.py.
+# Router instance for task-related endpoints.
+# The '/tasks' prefix is applied in the main application file.
 router = APIRouter(tags=["Tasks"])
 
 
@@ -68,34 +80,34 @@ def create_task(
     """
     Create a new task for the authenticated user.
 
-    This endpoint receives task creation data, gets the currently
-    authenticated user, and delegates task creation to the service layer.
+    The task is created using validated request data and associated
+    with the currently authenticated user. Authentication and database
+    session management are handled through FastAPI dependency injection.
 
     Parameters
     ----------
     task : TaskCreate
-        Payload containing task creation data.
+        Validated request payload containing task creation data.
 
     user : User
-        Currently authenticated user injected by the authentication
-        dependency.
+        The authenticated user resolved by the authentication dependency.
 
     db : Session
-        SQLAlchemy database session injected by FastAPI dependency system.
+        SQLAlchemy database session provided by the dependency system.
 
     Returns
     -------
     dict
-        Standard success response containing the created task.
+        Standardized success response containing the newly created task.
 
     Raises
     ------
     HTTPException
-        Raised by dependencies or the service layer if authentication
-        fails or task creation is invalid.
+        Propagated from dependencies or the service layer if authentication
+        fails or task creation cannot be completed.
     """
 
-    # Delegate task creation business logic to the service layer.
+    # Delegate task creation to the service layer.
     new_task = task_service.create_task(task, user.id, db)
 
     return success_response(
@@ -108,59 +120,59 @@ def create_task(
 def get_tasks(
     search: str | None = Query(None, description="Search tasks by title"),
     completed: bool | None = Query(None, description="Filter by completion status"),
-    sort_by: str = Query("created_at", description="Field to sort by"),
-    order: str = Query("desc", description="Sort order: asc or desc"),
+    sort_by: str = Query("created_at", description="Field used for sorting"),
+    order: str = Query("desc", description="Sorting order: asc or desc"),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Retrieve a paginated list of tasks for the authenticated user.
+    Retrieve a paginated list of tasks belonging to the authenticated user.
 
-    This endpoint supports searching, filtering, sorting, and pagination.
-    Only tasks belonging to the currently authenticated user are returned.
+    The endpoint supports advanced querying capabilities including:
+
+    - Title-based search
+    - Filtering by completion status
+    - Sorting by supported fields
+    - Pagination controls
+
+    Only tasks owned by the authenticated user are returned.
 
     Parameters
     ----------
     search : str | None
-        Optional search keyword used to filter tasks by title.
+        Optional keyword used for case-insensitive filtering by task title.
 
     completed : bool | None
-        Optional completion status filter.
+        Optional filter for task completion status.
 
     sort_by : str
-        Field name used for sorting results.
+        Field used to sort the results.
 
     order : str
-        Sort order. Expected values are typically 'asc' or 'desc'.
+        Sorting direction. Accepted values are "asc" or "desc".
 
     skip : int
-        Number of records to skip for pagination.
+        Number of records skipped before returning results.
 
     limit : int
-        Maximum number of records to return.
+        Maximum number of tasks returned in the response.
 
     user : User
-        Currently authenticated user injected by the authentication
-        dependency.
+        Authenticated user injected by the authentication dependency.
 
     db : Session
-        SQLAlchemy database session injected by FastAPI dependency system.
+        SQLAlchemy database session provided by FastAPI.
 
     Returns
     -------
     dict
-        Standard success response containing the user's task list.
-
-    Raises
-    ------
-    HTTPException
-        Raised by dependencies or the service layer if authentication
-        fails or query parameters are invalid.
+        Standardized success response containing the filtered and
+        paginated task collection.
     """
 
-    # Delegate task retrieval logic to the service layer.
+    # Delegate task retrieval to the service layer.
     tasks = task_service.get_tasks(
         user.id,
         db,
@@ -185,37 +197,35 @@ def get_task(
     db: Session = Depends(get_db),
 ):
     """
-    Retrieve a specific task by its ID.
+    Retrieve a specific task by its identifier.
 
-    This endpoint returns a single task only if it belongs to the
-    currently authenticated user.
+    The task will only be returned if it exists and belongs to the
+    authenticated user.
 
     Parameters
     ----------
     task_id : int
-        ID of the task to retrieve.
+        Unique identifier of the requested task.
 
     user : User
-        Currently authenticated user injected by the authentication
-        dependency.
+        Authenticated user injected by the authentication dependency.
 
     db : Session
-        SQLAlchemy database session injected by FastAPI dependency system.
+        SQLAlchemy database session provided by FastAPI.
 
     Returns
     -------
     dict
-        Standard success response containing the requested task.
+        Standardized success response containing the requested task.
 
     Raises
     ------
     HTTPException
-        Raised by dependencies or the service layer if authentication
-        fails, the task does not exist, or the task does not belong to
-        the current user.
+        Raised if the task does not exist or does not belong to
+        the authenticated user.
     """
 
-    # Delegate single-task retrieval logic to the service layer.
+    # Delegate single-task retrieval to the service layer.
     task = task_service.get_task(task_id, user.id, db)
 
     return success_response(
@@ -232,40 +242,38 @@ def update_task(
     db: Session = Depends(get_db),
 ):
     """
-    Update an existing task belonging to the authenticated user.
+    Update an existing task owned by the authenticated user.
 
-    This endpoint receives task update data and updates the task only
-    if it belongs to the currently authenticated user.
+    Partial updates are supported, meaning only the fields provided
+    in the request body will be modified.
 
     Parameters
     ----------
     task_id : int
-        ID of the task to update.
+        Identifier of the task to update.
 
     task : TaskUpdate
-        Payload containing fields that should be updated.
+        Payload containing fields to update.
 
     user : User
-        Currently authenticated user injected by the authentication
-        dependency.
+        Authenticated user injected by the authentication dependency.
 
     db : Session
-        SQLAlchemy database session injected by FastAPI dependency system.
+        SQLAlchemy database session provided by FastAPI.
 
     Returns
     -------
     dict
-        Standard success response containing the updated task.
+        Standardized success response containing the updated task.
 
     Raises
     ------
     HTTPException
-        Raised by dependencies or the service layer if authentication
-        fails, the task does not exist, or the task does not belong to
-        the current user.
+        Raised if the task does not exist or does not belong to
+        the authenticated user.
     """
 
-    # Delegate task update logic to the service layer.
+    # Delegate update operation to the service layer.
     updated_task = task_service.update_task(task_id, user.id, task, db)
 
     return success_response(
@@ -281,37 +289,35 @@ def delete_task(
     db: Session = Depends(get_db),
 ):
     """
-    Delete a task belonging to the authenticated user.
+    Delete a task owned by the authenticated user.
 
-    This endpoint deletes a task only if it belongs to the currently
-    authenticated user.
+    The task is permanently removed from the database if it exists
+    and belongs to the requesting user.
 
     Parameters
     ----------
     task_id : int
-        ID of the task to delete.
+        Identifier of the task to delete.
 
     user : User
-        Currently authenticated user injected by the authentication
-        dependency.
+        Authenticated user injected by the authentication dependency.
 
     db : Session
-        SQLAlchemy database session injected by FastAPI dependency system.
+        SQLAlchemy database session provided by FastAPI.
 
     Returns
     -------
     dict
-        Standard success response confirming task deletion.
+        Standardized success response confirming successful deletion.
 
     Raises
     ------
     HTTPException
-        Raised by dependencies or the service layer if authentication
-        fails, the task does not exist, or the task does not belong to
-        the current user.
+        Raised if the task does not exist or does not belong to
+        the authenticated user.
     """
 
-    # Delegate task deletion logic to the service layer.
+    # Delegate deletion to the service layer.
     task_service.delete_task(task_id, user.id, db)
 
     return success_response(

@@ -1,13 +1,49 @@
+"""
+Authentication Continuous Integration Tests
+
+This module contains integration tests designed to validate the
+authentication workflow of the API within automated testing and
+continuous integration environments.
+
+Purpose
+-------
+Ensure that the core authentication flow works correctly from
+an external API perspective, including:
+
+- User registration
+- User authentication
+- Token issuance
+
+The tests interact with the API using FastAPI's TestClient and rely
+on the testing database environment provided by pytest fixtures.
+"""
+
+
 def test_register_user_success(client) -> None:
     """
-    Test that a new user can register successfully.
+    Validate successful user registration.
 
-    Args:
-        client: FastAPI test client fixture.
+    This test verifies that the registration endpoint correctly
+    creates a new user when valid input data is provided.
 
-    Returns:
-        None
+    Assertions
+    ----------
+    - HTTP response status must be 201 (Created)
+    - Response must indicate success
+    - The returned payload must contain the correct email
+    - A user identifier must be present in the response data
+
+    Parameters
+    ----------
+    client : TestClient
+        FastAPI test client configured with the testing database.
+
+    Returns
+    -------
+    None
     """
+
+    # Send registration request to the authentication endpoint
     response = client.post(
         "/auth/register",
         json={
@@ -17,26 +53,44 @@ def test_register_user_success(client) -> None:
         }
     )
 
+    # Verify HTTP response status
     assert response.status_code == 201, "User registration failed."
 
     data = response.json()
 
+    # Validate API response structure
     assert data["success"] is True
     assert data["data"]["email"] == "test@example.com"
-    assert "id" in data["data"]  # User ID should exist
+
+    # Ensure the response includes the created user identifier
+    assert "id" in data["data"]
 
 
 def test_register_then_login(client) -> None:
     """
-    Test registering a user and then logging in to receive access token.
+    Validate the end-to-end authentication flow.
 
-    Args:
-        client: FastAPI test client fixture.
+    This test confirms that a user who successfully registers
+    can immediately authenticate using the login endpoint and
+    receive valid authentication tokens.
 
-    Returns:
-        None
+    Test Flow
+    ---------
+    1. Register a new user.
+    2. Authenticate using the provided credentials.
+    3. Verify that access and refresh tokens are returned.
+
+    Parameters
+    ----------
+    client : TestClient
+        FastAPI test client configured with the testing database.
+
+    Returns
+    -------
+    None
     """
-    # Register user
+
+    # Step 1: Register a new user account
     reg_response = client.post(
         "/auth/register",
         json={
@@ -46,9 +100,10 @@ def test_register_then_login(client) -> None:
         }
     )
 
+    # Ensure registration was successful
     assert reg_response.status_code == 201, "Registration failed."
 
-    # Now login
+    # Step 2: Attempt authentication with the created account
     login_response = client.post(
         "/auth/login",
         json={
@@ -57,10 +112,14 @@ def test_register_then_login(client) -> None:
         }
     )
 
+    # Verify login response status
     assert login_response.status_code == 200, "Login failed."
 
     login_data = login_response.json()
 
+    # Confirm API success flag
     assert login_data["success"] is True
+
+    # Ensure authentication tokens are returned
     assert "access_token" in login_data["data"]
     assert "refresh_token" in login_data["data"]
