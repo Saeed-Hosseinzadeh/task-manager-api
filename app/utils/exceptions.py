@@ -1,6 +1,9 @@
 """
-Global Exception Handlers for FastAPI.
-Standardizes error responses and logs issues across the application.
+Global Exception Handlers
+
+This module defines centralized exception handlers for the FastAPI application.
+The handlers standardize API error responses and ensure that all errors are
+properly logged for monitoring and debugging purposes.
 """
 
 from fastapi import Request, status
@@ -15,35 +18,43 @@ from .logger import logger
 
 async def http_exception_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """
-    Handle Starlette/FastAPI HTTP exceptions.
+    Handle HTTP exceptions raised by FastAPI or Starlette.
+
+    This handler captures all HTTP-related errors and converts them into
+    a standardized API response format.
 
     Args:
-        _request: The incoming HTTP request (unused).
-        exc: The exception instance containing detail and status code.
+        _request (Request): The incoming HTTP request (unused but required by FastAPI).
+        exc (StarletteHTTPException): The raised HTTP exception instance.
 
     Returns:
-        JSONResponse: Standardized error format with specific status code.
+        JSONResponse: A structured JSON response containing the error message
+        and the corresponding HTTP status code.
     """
     logger.warning(f"HTTP error: {exc.detail}")
 
     return JSONResponse(
         status_code=exc.status_code,
-        content=error_response(message=str(exc.detail))  # Fixed: removed status_code
+        content=error_response(message=str(exc.detail))
     )
 
 
 async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
     """
-    Handle Pydantic validation errors (422 Unprocessable Entity).
+    Handle request validation errors raised by Pydantic.
+
+    These errors occur when incoming request data fails schema validation.
+    The handler extracts field-level validation messages and returns them
+    in a consistent response structure.
 
     Args:
-        _request: The incoming HTTP request (unused).
-        exc: The validation error details.
+        _request (Request): The incoming HTTP request (unused but required by FastAPI).
+        exc (RequestValidationError): The validation exception raised by FastAPI.
 
     Returns:
-        JSONResponse: Standardized error format with list of validation issues.
+        JSONResponse: A standardized response containing validation error details.
     """
-    # Extract field name and message from Pydantic errors
+    # Extract field name and validation message from Pydantic error structure
     cleaned_errors = [
         {"field": " -> ".join(map(str, err["loc"][1:])), "message": err["msg"]}
         for err in exc.errors()
@@ -62,16 +73,20 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 
 async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError) -> JSONResponse:
     """
-    Handle SQLAlchemy database related errors.
+    Handle SQLAlchemy database exceptions.
+
+    This captures database-related errors and prevents internal database
+    details from being exposed to API clients while logging the full error
+    internally for debugging.
 
     Args:
-        _request: The incoming HTTP request (unused).
-        exc: The database exception.
+        _request (Request): The incoming HTTP request (unused).
+        exc (SQLAlchemyError): The raised SQLAlchemy exception.
 
     Returns:
-        JSONResponse: 500 Internal Server Error with a safe message.
+        JSONResponse: A 500 Internal Server Error response with a safe message.
     """
-    logger.error(f"Database error: {str(exc)}")  # Log the full error for debugging
+    logger.error(f"Database error: {str(exc)}")
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -81,14 +96,17 @@ async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError) 
 
 async def general_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
     """
-    Catch-all handler for any unexpected server errors.
+    Catch-all handler for unexpected application errors.
+
+    This serves as a fallback mechanism for any unhandled exceptions,
+    ensuring the API always returns a consistent error format.
 
     Args:
-        _request: The incoming HTTP request (unused).
-        exc: The unhandled exception.
+        _request (Request): The incoming HTTP request (unused).
+        exc (Exception): The unhandled exception instance.
 
     Returns:
-        JSONResponse: 500 Internal Server Error with a generic message.
+        JSONResponse: A 500 Internal Server Error response with a generic message.
     """
     logger.error(f"Unexpected system error: {str(exc)}")
 

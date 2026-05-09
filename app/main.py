@@ -1,22 +1,23 @@
 """
 Main Application Entry Point
 
-This module initializes the FastAPI application and registers all routers.
-Optimized for both Local and GitHub Actions environments.
+This module serves as the entry point for the FastAPI application.
+It handles environment path configuration, router registration,
+and initializes the API instance.
 """
 
 from fastapi import FastAPI
 import sys
 import os
 
-# اضافه کردن مسیر جاری به پایتون برای حل مشکل ایمپورت در CI
+# Add current directory to sys.path to ensure correct module resolution in CI/CD environments.
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 try:
-    # سعی برای ایمپورت زمانی که در پوشه app هستیم
+    # Attempt to import routers when the application is structured under the 'app' module.
     from routers import auth, tasks
 except ImportError:
-    # سعی برای ایمپورت زمانی که از روت پروژه اجرا می‌شود
+    # Fallback import for when the application is executed from the project root directory.
     from app.routers import auth, tasks
 
 # Create FastAPI application instance
@@ -31,7 +32,12 @@ app = FastAPI(
 # ---------------------------------------------------------
 @app.get("/health", tags=["Health"])
 def health_check():
-    """Verify API availability."""
+    """
+    Verify the API service availability.
+
+    Returns:
+        dict: A status dictionary confirming the API is operational.
+    """
     return {"status": "ok"}
 
 # ---------------------------------------------------------
