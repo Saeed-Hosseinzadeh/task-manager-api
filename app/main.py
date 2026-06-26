@@ -1,59 +1,42 @@
-"""
-Main Application Entry Point
-
-This module serves as the entry point for the FastAPI application.
-It handles environment path configuration, router registration,
-and initializes the API instance.
-"""
+from __future__ import annotations
 
 from fastapi import FastAPI
-import sys
-import os
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# Add current directory to sys.path to ensure correct module resolution in CI/CD environments.
-sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+from app.routers import auth, tasks
+from app.utils.exceptions import (
+    general_exception_handler,
+    http_exception_handler,
+    sqlalchemy_exception_handler,
+    validation_exception_handler,
+)
 
-try:
-    # Attempt to import routers when the application is structured under the 'app' module.
-    from routers import auth, tasks
-except ImportError:
-    # Fallback import for when the application is executed from the project root directory.
-    from app.routers import auth, tasks
-
-# Create FastAPI application instance
 app = FastAPI(
     title="Task Manager API",
     version="1.0.0",
-    description="A simple task management API with authentication support."
+    description="Task management API with authentication support.",
 )
 
-# ---------------------------------------------------------
-# Health Check Route
-# ---------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+app.include_router(auth.router)
+app.include_router(tasks.router)
+
+
 @app.get("/health", tags=["Health"])
-def health_check():
-    """
-    Verify the API service availability.
-
-    Returns:
-        dict: A status dictionary confirming the API is operational.
-    """
+def health_check() -> dict[str, str]:
     return {"status": "ok"}
-
-# ---------------------------------------------------------
-# Authentication Routes
-# ---------------------------------------------------------
-app.include_router(
-    auth.router,
-    prefix="/auth",
-    tags=["Authentication"]
-)
-
-# ---------------------------------------------------------
-# Task Routes
-# ---------------------------------------------------------
-app.include_router(
-    tasks.router,
-    prefix="/tasks",
-    tags=["Tasks"]
-)
