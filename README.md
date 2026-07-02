@@ -1,310 +1,292 @@
-# 🚀 Task Manager API
+# Task Manager API
 
-A production‑style **Task Management REST API** built with **FastAPI**, demonstrating clean architecture, secure authentication, automated testing, and containerized deployment.
+A production-oriented task management API built with **FastAPI**, **SQLAlchemy 2.0**, and **Pydantic v2**.
 
-This repository is designed as a **portfolio‑grade backend project** that showcases modern Python backend engineering practices.
-
----
-
-## 🛡️ Badges
-
-[![CI/CD Pipeline](https://github.com/Saeed-Hosseinzadeh/task-manager-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Saeed-Hosseinzadeh/task-manager-api/actions)
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-production-green)
-![Docker](https://img.shields.io/badge/docker-ready-blue)
-![Tests](https://img.shields.io/badge/tests-pytest-success)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
+The project is structured around a clean service-oriented architecture with explicit separation between routing, business logic, persistence, validation, authentication, and infrastructure concerns. It provides user authentication, task management, consistent API responses, structured logging, and centralized exception handling in a codebase designed to stay maintainable as it grows.
 
 ---
 
-## 📌 Why This Project Exists
+## Features
 
-This project demonstrates how to build a **realistic backend service** using modern Python tools and production‑style engineering practices.
-
-**The goals of this project are:**
-- Demonstrate clean backend architecture
-- Implement secure authentication with JWT
-- Showcase database migrations
-- Provide automated testing
-- Demonstrate containerized deployment
-- Provide clear developer documentation
-
-**It can serve as:**
-- A backend architecture reference
-- A learning resource for FastAPI
-- A portfolio project for backend roles
+- Clean FastAPI application structure with focused modules and predictable responsibilities
+- Modern SQLAlchemy 2.0 model definitions using typed mappings
+- Pydantic v2 schemas for request validation and response serialization
+- JWT-based authentication with **access** and **refresh** tokens
+- Password hashing via **Passlib** using **PBKDF2-SHA256**
+- Reusable service layer for auth and task workflows
+- Consistent API response shape across endpoints
+- Centralized global exception handling for HTTP, validation, and database errors
+- Structured logging to both **console** and `logs/app.log`
+- Test-friendly design with clear dependency boundaries
 
 ---
 
-## ✨ Key Features
+## Tech Stack
 
-- **User Authentication:** Registration and authentication flows.
-- **Secure Access:** JWT access tokens and password hashing with Passlib.
-- **Task Management:** Full CRUD operations for tasks.
-- **Database:** PostgreSQL database integration with SQLAlchemy 2.0 ORM.
-- **Migrations:** Version control for database schemas using Alembic.
-- **Configuration:** Environment‑based configuration management.
-- **Containerization:** Dockerized development environment.
-- **Testing:** Automated testing with pytest.
-- **Documentation:** Interactive API documentation out of the box.
+- **Python 3.13**
+- **FastAPI**
+- **SQLAlchemy** (ORM)
+- **Pydantic v2**
+- **Passlib** with **PBKDF2-SHA256**
+- **python-jose** for JWT handling
+- **Uvicorn** for local development server
 
 ---
 
-## 🛠️ Technology Stack
+## Project Structure
 
-| Category | Technology |
-| :--- | :--- |
-| **Framework** | FastAPI |
-| **Database** | PostgreSQL |
-| **ORM** | SQLAlchemy 2.0 |
-| **Migrations** | Alembic |
-| **Authentication** | JWT (`python‑jose`) |
-| **Security** | Passlib (Password hashing) |
-| **Configuration** | Pydantic Settings |
-| **Testing** | Pytest + HTTPX |
-| **Containerization** | Docker / Docker Compose |
-
----
-
-## 🏗️ Architecture
-
-The project follows a **layered architecture** to keep responsibilities separated and maintainable.
 ```text
-Client
-  │
-  ▼
-API Layer (FastAPI Routers)
-  │
-  ▼
-Service Layer (Business Logic)
-  │
-  ▼
-Data Layer (SQLAlchemy Models)
-  │
-  ▼
-PostgreSQL Database
-
-- **API Layer:** Handles HTTP requests and responses.
-- **Service Layer:** Contains application business logic.
-- **Data Layer:** Manages persistence and database interaction.
-
----
-
-## 📁 Project Structure
-
-Each layer has a clear responsibility which keeps the codebase scalable and easy to maintain.
-
-text
-app/
-├── api/
-│   └── routers/
-│       ├── auth.py
-│       └── tasks.py
-├── core/
-│   ├── config.py
-│   ├── security.py
-│   └── logger.py
-├── db/
-│   └── database.py
-├── models/
-│   └── models.py
-├── schemas/
+task_manager_api/
+├── app/
+│   ├── core/
+│   │   ├── config.py
+│   │   └── security.py
+│   ├── routers/
+│   │   ├── auth.py
+│   │   └── tasks.py
+│   ├── services/
+│   │   ├── auth_service.py
+│   │   └── task_service.py
+│   ├── utils/
+│   │   ├── exceptions.py
+│   │   ├── logger.py
+│   │   └── response.py
+│   ├── dependencies.py
+│   ├── main.py
+│   ├── models.py
 │   └── schemas.py
-├── services/
-│   ├── auth_service.py
-│   └── task_service.py
-└── main.py
-
-alembic/
-tests/
-├── conftest.py
-├── test_auth.py
-└── test_tasks.py
-
----
-
-## ⚙️ Environment Variables
-
-Create a `.env` file using `.env.example` as a reference. Example configuration:
-
-env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/task_db
-SECRET_KEY=super-secret-key
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-**Variable Descriptions:**
-- `DATABASE_URL`: Database connection string used by SQLAlchemy.
-- `SECRET_KEY`: Secret used for signing JWT tokens.
-- `ALGORITHM`: JWT hashing algorithm.
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: Expiration time for access tokens.
-- `REFRESH_TOKEN_EXPIRE_DAYS`: Expiration time for refresh tokens.
+├── tests/
+├── alembic/
+├── .env.example
+├── alembic.ini
+├── docker-compose.yml
+├── Dockerfile
+├── README.md
+└── requirements.txt
+```
 
 ---
 
-## 🚀 Running the Application
+## Architecture Overview
 
-**Run locally:**
-bash
+The application is organized around a small set of clear layers:
+
+- **Routers** define HTTP endpoints and request/response flow
+- **Services** contain business logic and keep route handlers thin
+- **Models** define database entities using SQLAlchemy 2.0 typed mappings
+- **Schemas** validate input and serialize output with Pydantic v2
+- **Dependencies** encapsulate shared FastAPI dependency logic such as authentication and database sessions
+- **Core** contains configuration and security primitives
+- **Utils** provide response formatting, logging, and exception handling
+
+This structure keeps framework details from bleeding into business logic and makes testing and refactoring straightforward.
+
+---
+
+## Authentication
+
+Authentication is based on JWT tokens and follows a simple split:
+
+- **Access token** for authenticated API requests
+- **Refresh token** for obtaining a new access token without forcing the user to log in again
+
+Security-related behavior includes:
+
+- Password hashing with **PBKDF2-SHA256**
+- Token creation with explicit expiration
+- Token type validation (`access` vs `refresh`)
+- Current-user resolution through a dedicated FastAPI dependency
+
+---
+
+## Logging and Error Handling
+
+The API includes centralized operational concerns out of the box:
+
+### Structured Logging
+
+- Logs are written to both:
+  - standard output
+  - `logs/app.log`
+- Uses a clean, production-friendly format suitable for local development and deployment environments
+
+### Global Exception Handling
+
+- HTTP errors are normalized into a consistent response structure
+- Request validation errors are returned with useful field-level details
+- SQLAlchemy exceptions are logged without leaking internal database details
+- Unhandled exceptions fall back to a safe internal server error response
+
+---
+
+## API Response Shape
+
+The API uses a consistent response wrapper for both successful and failed operations.
+
+### Success response
+
+```json
+{
+  "success": true,
+  "message": "Task created successfully",
+  "data": {
+    "id": 1,
+    "title": "Write README",
+    "is_completed": false
+  }
+}
+```
+
+### Error response
+
+```json
+{
+  "success": false,
+  "message": "Input validation failed",
+  "data": [
+    {
+      "field": "title",
+      "message": "Field required"
+    }
+  ]
+}
+```
+
+This keeps client integration predictable and reduces ad hoc response formatting across endpoints.
+
+---
+
+## Setup and Installation
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repository-url>
+cd task_manager_api
+```
+
+### 2. Create and activate a virtual environment
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Configure environment variables
+
+Create a `.env` file in the project root. Use `.env.example` as the starting point.
+
+Typical values include database connection settings, JWT secret configuration, and token expiration settings.
+
+### 5. Run the application
+
+```bash
 uvicorn app.main:app --reload
-Application will be available at: `http://localhost:8000`
+```
+
+The API will be available at:
+
+- `http://127.0.0.1:8000`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
 
 ---
 
-## 🐳 Docker Deployment
+## Development Notes
 
-Run the entire stack with Docker (Starts FastAPI API server & PostgreSQL database):
-bash
-docker-compose up --build
+### Database
 
-Stop containers:
-bash
-docker-compose down
+The project uses SQLAlchemy as the ORM and is designed around modern typed model declarations. Depending on your current setup, you can point the application at SQLite for local development or another relational database via environment configuration.
 
----
+### Testing
 
-## 🗄️ Database Migrations
+If test files are present, run them with:
 
-Apply migrations:
-bash
-alembic upgrade head
-
-Create a new migration:
-bash
-alembic revision --autogenerate -m "new migration"
-
----
-
-## 📚 API Documentation
-
-- **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
----
-
-## 📡 API Endpoints
-
-**Authentication**
-- `POST /auth/register`
-- `POST /auth/login`
-
-**Tasks**
-- `POST /tasks`
-- `GET /tasks`
-- `GET /tasks/{id}`
-- `DELETE /tasks/{id}`
-
----
-
-## 💻 Sample Requests / Responses
-
-### 1. Register
-**Request:** `POST /auth/register`
-json
-{
-  "username": "john",
-  "email": "john@example.com",
-  "password": "StrongPassword123"
-}
-**Response:**
-json
-{
-  "success": true,
-  "message": "User registered successfully",
-  "data": {
-"id": 1,
-"email": "john@example.com"
-  }
-}
-
-### 2. Login
-**Request:** `POST /auth/login`
-json
-{
-  "identifier": "john@example.com",
-  "password": "StrongPassword123"
-}
-**Response:**
-json
-{
-  "success": true,
-  "data": {
-"access_token": "...",
-"refresh_token": "..."
-  }
-}
-
-### 3. Create Task
-**Request:** `POST /tasks`
-*Headers: `Authorization: Bearer <access_token>`*
-json
-{
-  "title": "Complete project",
-  "description": "Finish implementing the API"
-}
-
----
-
-## 📸 Screenshots / Demo
-
-*(Example responses can be viewed directly in the interactive documentation at the `/docs` endpoint. You can add screenshots from Swagger UI here for demonstration.)*
-
----
-
-## 🔄 Continuous Integration
-
-Example GitHub Actions pipeline:
-- Install dependencies
-- Run lint checks
-- Run tests
-
-*(CI badge is included at the top of this document).*
-
----
-
-## ✔️ Testing
-
-Run all tests:
-bash
+```bash
 pytest
-Verbose mode:
-bash
-pytest -vv
-**Tests cover:** Authentication flow, token generation, protected endpoints, and task creation.
+```
+
+### Health Check
+
+A simple health endpoint is exposed for service monitoring:
+
+```http
+GET /health
+```
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ---
 
-## 🚧 Troubleshooting
+## API Modules
 
-- **Database connection issues:** Verify PostgreSQL is running and `DATABASE_URL` is correct.
-- **Docker issues:** Run `docker-compose logs` to see detailed errors.
-- **Migration errors:** Ensure the database exists before running migrations.
+### Auth
 
----
+Authentication endpoints are responsible for:
 
-## 🤝 Contributing
+- user registration
+- login
+- refresh token exchange
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit changes
-4. Push branch
-5. Open pull request
+### Tasks
 
----
+Task endpoints support:
 
-## 🗺️ Roadmap
+- creating tasks
+- listing tasks
+- retrieving a single task
+- updating tasks
+- deleting tasks
 
-Possible future improvements:
-- [ ] Refresh token rotation
-- [ ] Task update endpoint
-- [ ] Pagination support
-- [ ] Role based authorization
-- [ ] Rate limiting
-- [ ] Production deployment example
+Filtering and sorting behavior is handled in the service layer to keep route handlers concise.
 
 ---
 
-## 📄 License
+## Why This Structure Works
 
-MIT License - [https://opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
+This codebase is intentionally optimized for maintainability rather than cleverness.
+
+- Route handlers remain thin and readable
+- Business rules live in services
+- Validation rules live in schemas
+- Database concerns stay close to models and session dependencies
+- Operational concerns such as logging and exception handling are centralized
+
+That balance makes the project easy to reason about, extend, and test in a real production workflow.
+
+---
+
+## Running in Production
+
+For production deployment:
+
+- run with a proper ASGI server process setup
+- replace permissive CORS settings with explicit allowed origins
+- provide a strong `SECRET_KEY`
+- configure environment variables explicitly
+- route logs to your platform’s aggregation stack if needed
+
+---
+
+## License
+
+This project is distributed under the terms defined in the repository license.
