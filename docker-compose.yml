@@ -1,98 +1,44 @@
-# -----------------------------------------------------------------------------
-# Docker Compose Configuration
-#
-# This configuration defines the containerized infrastructure required to run
-# the FastAPI Task Manager application. It includes two primary services:
-#
-# 1. db  : PostgreSQL database used for persistent data storage.
-# 2. web : FastAPI application container responsible for serving the API.
-#
-# The application container waits for the database to become healthy before
-# starting and automatically runs database migrations using Alembic.
-# -----------------------------------------------------------------------------
-
 version: "3.9"
 
 services:
-
-  # ---------------------------------------------------------------------------
-  # PostgreSQL Database Service
-  #
-  # Provides the relational database used by the FastAPI application.
-  # Data is persisted using a Docker volume to ensure it survives
-  # container restarts.
-  # ---------------------------------------------------------------------------
   db:
     image: postgres:14
     container_name: taskmanager_db
     restart: always
-
     environment:
       POSTGRES_USER: fastapi_user
       POSTGRES_PASSWORD: strongpassword
       POSTGRES_DB: taskmanager_db
-
     volumes:
-      # Persistent storage for PostgreSQL data
       - postgres_data:/var/lib/postgresql/data
-
     healthcheck:
-      # Verifies that PostgreSQL is ready to accept connections
       test: ["CMD-SHELL", "pg_isready -U fastapi_user"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # ---------------------------------------------------------------------------
-  # FastAPI Application Service
-  #
-  # Builds the API container from the project Dockerfile and starts the
-  # application using Uvicorn. Before launching the server, Alembic
-  # migrations are executed to ensure the database schema is up to date.
-  # ---------------------------------------------------------------------------
   web:
     build: .
     container_name: taskmanager_api
     restart: always
-
     command: >
-      sh -c "
-        alembic upgrade head &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000
-      "
-
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
-      # Expose API on host port 8000
       - "8000:8000"
-
     depends_on:
       db:
-        # Wait until the database passes the health check
         condition: service_healthy
-
     env_file:
-      # Load environment variables from .env file
       - .env
-
     environment:
-      # Ensures the application module path is available inside the container
       PYTHONPATH: /code
-
     volumes:
-      # Mount project directory for development (hot reload / code sync)
       - .:/code
-
     healthcheck:
-      # Verify that the FastAPI application is responding
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-# -----------------------------------------------------------------------------
-# Named Volumes
-#
-# Used to persist PostgreSQL data independently from the container lifecycle.
-# -----------------------------------------------------------------------------
 volumes:
   postgres_data:

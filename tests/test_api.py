@@ -1,59 +1,65 @@
-def test_full_user_flow(client) -> None:
-    """
-    Test full user workflow:
-    register -> login -> create task -> retrieve tasks.
-    """
-
-    # Register
-    register_response = client.post(
+def register_user(
+    client,
+    *,
+    username: str = "flowuser",
+    email: str = "flow@example.com",
+    password: str = "Test@123",
+):
+    return client.post(
         "/auth/register",
         json={
-            "username": "flowuser",
-            "email": "flow@example.com",
-            "password": "Test@123"
-        }
+            "username": username,
+            "email": email,
+            "password": password,
+        },
     )
 
-    assert register_response.status_code == 201
 
-    # Login
-    login_response = client.post(
+def login_user(client, *, identifier: str, password: str = "Test@123"):
+    return client.post(
         "/auth/login",
         json={
-            "identifier": "flow@example.com",
-            "password": "Test@123"
-        }
+            "identifier": identifier,
+            "password": password,
+        },
     )
 
+
+def authenticate(client) -> dict[str, str]:
+    register_response = register_user(client)
+    assert register_response.status_code == 201
+
+    login_response = login_user(client, identifier="flow@example.com")
     assert login_response.status_code == 200
 
-    token = login_response.json()["data"]["access_token"]
+    access_token = login_response.json()["data"]["access_token"]
+    return {"Authorization": f"Bearer {access_token}"}
 
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
 
-    # Create task
+def test_full_user_flow(client) -> None:
+    headers = authenticate(client)
+
     create_response = client.post(
         "/tasks",
         json={
             "title": "Integration Task",
-            "description": "Testing full workflow"
+            "description": "Testing full workflow",
         },
-        headers=headers
+        headers=headers,
     )
-
     assert create_response.status_code == 201
 
-    # Get tasks
-    tasks_response = client.get(
-        "/tasks",
-        headers=headers
-    )
+    create_payload = create_response.json()
+    assert create_payload["success"] is True
+    assert create_payload["message"]
+    assert create_payload["data"]["title"] == "Integration Task"
 
-    assert tasks_response.status_code == 200
+    list_response = client.get("/tasks", headers=headers)
+    assert list_response.status_code == 200
 
-    tasks_data = tasks_response.json()
-
-    assert tasks_data["success"] is True
-    assert len(tasks_data["data"]) >= 1
+    list_payload = list_response.json()
+    assert list_payload["success"] is True
+    assert list_payload["message"]
+    assert isinstance(list_payload["data"], list)
+    assert len(list_payload["data"]) == 1
+    assert list_payload["data"][0]["title"] == "Integration Task"

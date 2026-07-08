@@ -1,69 +1,39 @@
-# =========================
 # Python
-# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.sqlite3
 *.db
 
-# =========================
 # Virtual Environments
-# =========================
 .venv/
 venv/
 env/
 
-# =========================
-# Environment Variables
-# =========================
+# Environment
 .env
 .env.*
-!.env.example  # Keep example env file
+!.env.example
 
-# =========================
 # Testing & Coverage
-# =========================
 .pytest_cache/
 .coverage
 htmlcov/
 coverage.xml
-
-# =========================
-# Type Checking
-# =========================
 .mypy_cache/
 
-# =========================
-# Build / Distribution
-# =========================
+# Build & Distribution
 build/
 dist/
 *.egg-info/
 
-# =========================
-# Logs
-# =========================
+# Logs & IDE
 *.log
-
-# =========================
-# IDE
-# =========================
 .vscode/
 .idea/
-
-# =========================
-# OS
-# =========================
 .DS_Store
 Thumbs.db
 
-# =========================
-# Docker
-# =========================
+# Infrastructure
 docker-compose.override.yml
-
-# =========================
-# Alembic
-# =========================
 alembic/versions/__pycache__/

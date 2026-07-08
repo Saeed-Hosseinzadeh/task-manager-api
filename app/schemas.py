@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+T = TypeVar("T")
 
+
+# --- Base Envelope Schema ---
+class APIResponse(BaseModel, Generic[T]):
+    success: bool = True
+    message: str
+    data: T | None = None
+
+
+# --- User & Auth Base Schemas ---
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=30)
     email: EmailStr
@@ -55,6 +65,7 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+# --- Task Base Schemas ---
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
     description: Optional[str] = Field(default=None, max_length=500)
@@ -96,3 +107,46 @@ class TaskResponse(TaskBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Auth Concrete Data Payloads (Service Aligned) ---
+class UserRegisterAndToken(UserResponse):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshTokenOnly(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+# --- Task Concrete Response Wrappers ---
+class TaskDetailResponse(APIResponse[TaskResponse]):
+    pass
+
+
+class TaskListResponse(APIResponse[list[TaskResponse]]):
+    pass
+
+
+class EmptyResponse(APIResponse[None]):
+    pass
+
+
+# --- Auth Concrete Response Wrappers ---
+class RegistrationResponse(APIResponse[UserRegisterAndToken]):
+    pass
+
+
+class LoginResponse(APIResponse[Token]):
+    pass
+
+
+class RefreshResponse(APIResponse[RefreshTokenOnly]):
+    pass
+
+
+# --- Health Concrete Response Wrapper ---
+class HealthResponse(APIResponse[dict[str, str]]):
+    pass

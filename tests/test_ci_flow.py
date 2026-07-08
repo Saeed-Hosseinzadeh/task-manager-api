@@ -1,38 +1,65 @@
-def test_ci_full_flow(client):
-    # 1) register
-    register_response = client.post(
+def register_user(
+    client,
+    *,
+    username: str = "ciuser",
+    email: str = "ciuser@example.com",
+    password: str = "Test@123456",
+):
+    return client.post(
         "/auth/register",
         json={
-            "username": "ciuser",
-            "email": "ciuser@example.com",
-            "password": "Test@123456"
-        }
+            "username": username,
+            "email": email,
+            "password": password,
+        },
     )
-    assert register_response.status_code in [200, 201]
 
-    # 2) login
-    login_response = client.post(
+
+def login_user(client, *, identifier: str, password: str = "Test@123456"):
+    return client.post(
         "/auth/login",
         json={
-            "identifier": "ciuser@example.com",
-            "password": "Test@123456"
-        }
+            "identifier": identifier,
+            "password": password,
+        },
     )
+
+
+def get_auth_headers(client) -> dict[str, str]:
+    register_response = register_user(client)
+    assert register_response.status_code == 201
+
+    login_response = login_user(client, identifier="ciuser@example.com")
     assert login_response.status_code == 200
 
-    login_data = login_response.json()
-    token = login_data["data"]["access_token"]
+    token = login_response.json()["data"]["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
-    # 3) create task
-    create_response = client.post(
+
+def test_ci_full_flow(client) -> None:
+    headers = get_auth_headers(client)
+
+    response = client.post(
         "/tasks",
         json={
             "title": "CI Task",
-            "description": "Created during CI test"
+            "description": "Created during CI test",
         },
-        headers={"Authorization": f"Bearer {token}"}
+        headers=headers,
     )
-    assert create_response.status_code in [200, 201]
-def test_db_connected(client):
+    assert response.status_code == 201
+
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["message"]
+    assert payload["data"]["title"] == "CI Task"
+    assert payload["data"]["description"] == "Created during CI test"
+
+
+def test_health_check(client) -> None:
     response = client.get("/health")
     assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["message"]
