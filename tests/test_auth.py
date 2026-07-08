@@ -1,125 +1,60 @@
-"""
-Authentication Continuous Integration Tests
+def register_user(
+    client,
+    *,
+    username: str = "testuser",
+    email: str = "test@example.com",
+    password: str = "Test@123",
+):
+    return client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": email,
+            "password": password,
+        },
+    )
 
-This module contains integration tests designed to validate the
-authentication workflow of the API within automated testing and
-continuous integration environments.
 
-Purpose
--------
-Ensure that the core authentication flow works correctly from
-an external API perspective, including:
-
-- User registration
-- User authentication
-- Token issuance
-
-The tests interact with the API using FastAPI's TestClient and rely
-on the testing database environment provided by pytest fixtures.
-"""
+def login_user(client, *, identifier: str, password: str = "Test@123"):
+    return client.post(
+        "/auth/login",
+        json={
+            "identifier": identifier,
+            "password": password,
+        },
+    )
 
 
 def test_register_user_success(client) -> None:
-    """
-    Validate successful user registration.
+    response = register_user(client)
 
-    This test verifies that the registration endpoint correctly
-    creates a new user when valid input data is provided.
+    assert response.status_code == 201
 
-    Assertions
-    ----------
-    - HTTP response status must be 201 (Created)
-    - Response must indicate success
-    - The returned payload must contain the correct email
-    - A user identifier must be present in the response data
-
-    Parameters
-    ----------
-    client : TestClient
-        FastAPI test client configured with the testing database.
-
-    Returns
-    -------
-    None
-    """
-
-    # Send registration request to the authentication endpoint
-    response = client.post(
-        "/auth/register",
-        json={
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": "Test@123"
-        }
-    )
-
-    # Verify HTTP response status
-    assert response.status_code == 201, "User registration failed."
-
-    data = response.json()
-
-    # Validate API response structure
-    assert data["success"] is True
-    assert data["data"]["email"] == "test@example.com"
-
-    # Ensure the response includes the created user identifier
-    assert "id" in data["data"]
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["message"]
+    assert payload["data"]["id"] is not None
+    assert payload["data"]["username"] == "testuser"
+    assert payload["data"]["email"] == "test@example.com"
 
 
 def test_register_then_login(client) -> None:
-    """
-    Validate the end-to-end authentication flow.
-
-    This test confirms that a user who successfully registers
-    can immediately authenticate using the login endpoint and
-    receive valid authentication tokens.
-
-    Test Flow
-    ---------
-    1. Register a new user.
-    2. Authenticate using the provided credentials.
-    3. Verify that access and refresh tokens are returned.
-
-    Parameters
-    ----------
-    client : TestClient
-        FastAPI test client configured with the testing database.
-
-    Returns
-    -------
-    None
-    """
-
-    # Step 1: Register a new user account
-    reg_response = client.post(
-        "/auth/register",
-        json={
-            "username": "loginuser",
-            "email": "login@example.com",
-            "password": "Test@123"
-        }
+    register_response = register_user(
+        client,
+        username="loginuser",
+        email="login@example.com",
     )
+    assert register_response.status_code == 201
 
-    # Ensure registration was successful
-    assert reg_response.status_code == 201, "Registration failed."
-
-    # Step 2: Attempt authentication with the created account
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "identifier": "login@example.com",
-            "password": "Test@123"
-        }
+    login_response = login_user(
+        client,
+        identifier="login@example.com",
     )
+    assert login_response.status_code == 200
 
-    # Verify login response status
-    assert login_response.status_code == 200, "Login failed."
-
-    login_data = login_response.json()
-
-    # Confirm API success flag
-    assert login_data["success"] is True
-
-    # Ensure authentication tokens are returned
-    assert "access_token" in login_data["data"]
-    assert "refresh_token" in login_data["data"]
+    payload = login_response.json()
+    assert payload["success"] is True
+    assert payload["message"]
+    assert payload["data"]["access_token"]
+    assert payload["data"]["refresh_token"]
+    assert payload["data"]["token_type"] == "bearer"
