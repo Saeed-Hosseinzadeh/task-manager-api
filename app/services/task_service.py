@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models import Task, User
+from app.models import Task
 from app.schemas import TaskCreate, TaskUpdate
 
 
@@ -28,11 +28,18 @@ def get_user_tasks(
     completed: bool | None = None,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    *,
+    priority: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[Task]:
     query = db.query(Task).filter(Task.owner_id == user_id)
 
     if completed is not None:
         query = query.filter(Task.is_completed == completed)
+
+    if priority is not None:
+        query = query.filter(Task.priority == priority)
 
     sort_columns = {
         "created_at": Task.created_at,
@@ -51,15 +58,11 @@ def get_user_tasks(
     else:
         query = query.order_by(sort_column.asc())
 
-    return query.order_by(Task.id).all()
+    return query.order_by(Task.id).offset(offset).limit(limit).all()
 
 
 def get_task_by_id(task_id: int, user_id: int, db: Session) -> Task:
-    task = (
-        db.query(Task)
-        .filter(Task.id == task_id, Task.owner_id == user_id)
-        .first()
-    )
+    task = db.query(Task).filter(Task.id == task_id, Task.owner_id == user_id).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -84,7 +87,3 @@ def delete_task(task_id: int, user_id: int, db: Session) -> None:
     task = get_task_by_id(task_id, user_id, db)
     db.delete(task)
     db.commit()
-
-
-def get_task_owner(user_id: int, db: Session) -> User | None:
-    return db.query(User).filter(User.id == user_id).first()

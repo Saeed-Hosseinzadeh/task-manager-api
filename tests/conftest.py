@@ -20,12 +20,14 @@ TestingSessionLocal = sessionmaker(
     bind=engine,
 )
 
+
 @pytest.fixture(scope="session")
 def setup_database():
     """Create database tables once per test session."""
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
 
 @pytest.fixture
 def db_session(setup_database):
@@ -43,11 +45,13 @@ def db_session(setup_database):
     transaction.rollback()
     connection.close()
 
+
 @pytest.fixture
 def client(db_session):
     """
     Provides a FastAPI TestClient with the database dependency overridden.
     """
+
     def override_get_db():
         yield db_session
 

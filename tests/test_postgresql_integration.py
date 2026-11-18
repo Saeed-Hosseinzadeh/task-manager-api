@@ -1,12 +1,12 @@
 """Use Alembic-managed schemas on an explicitly configured test PostgreSQL server."""
 
 import os
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from pathlib import Path
 import subprocess
 import sys
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 from threading import Barrier
 from uuid import uuid4
 
@@ -37,9 +37,9 @@ def postgres_schema():
 
     schema = f"task_test_{uuid4().hex}"
     base_engine = create_engine(base_url)
-    scoped_url = base_url.update_query_dict({
-        "options": f"-csearch_path={schema} -ctimezone=Asia/Tokyo"
-    })
+    scoped_url = base_url.update_query_dict(
+        {"options": f"-csearch_path={schema} -ctimezone=Asia/Tokyo"}
+    )
     engine = create_engine(scoped_url)
     try:
         with base_engine.begin() as connection:
@@ -145,10 +145,13 @@ def test_migrated_postgresql_task_crud_and_ownership(postgres_client):
 
 
 def insert_legacy_owner(connection, email="legacy@example.org"):
-    return connection.execute(text("""
+    return connection.execute(
+        text("""
         INSERT INTO users (username, email, hashed_password)
         VALUES ('legacy', :email, 'legacy-test-hash') RETURNING id
-    """), {"email": email}).scalar_one()
+    """),
+        {"email": email},
+    ).scalar_one()
 
 
 def test_legacy_data_upgrade_downgrade_and_reupgrade(postgres_schema, monkeypatch):
@@ -156,28 +159,37 @@ def test_legacy_data_upgrade_downgrade_and_reupgrade(postgres_schema, monkeypatc
     migrate(url, "upgrade", INITIAL_REVISION)
     with engine.begin() as connection:
         owner_id = insert_legacy_owner(connection, LONG_EMAIL)
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO tasks (title, owner_id, created_at, due_date)
             VALUES ('Legacy nulls', :owner_id, NULL, NULL),
                    ('Legacy timestamp', :owner_id, '2020-01-02 03:04:05',
                     '2020-03-04 05:06:07')
-        """), {"owner_id": owner_id})
+        """),
+            {"owner_id": owner_id},
+        )
 
     with engine.begin() as connection:
-        before_migration = connection.execute(text(
-            "SELECT clock_timestamp() AT TIME ZONE 'UTC'"
-        )).scalar_one()
+        before_migration = connection.execute(
+            text("SELECT clock_timestamp() AT TIME ZONE 'UTC'")
+        ).scalar_one()
     migrate(url, "upgrade", "head")
     with engine.begin() as connection:
-        after_migration = connection.execute(text(
-            "SELECT clock_timestamp() AT TIME ZONE 'UTC'"
-        )).scalar_one()
+        after_migration = connection.execute(
+            text("SELECT clock_timestamp() AT TIME ZONE 'UTC'")
+        ).scalar_one()
         assert connection.execute(text("SHOW TimeZone")).scalar_one() == "Asia/Tokyo"
         assert connection.execute(text("SELECT email FROM users")).scalar_one() == LONG_EMAIL
-        backfilled, preserved = connection.execute(text("""
+        backfilled, preserved = (
+            connection.execute(
+                text("""
             SELECT created_at, due_date, is_completed, priority, owner_id
             FROM tasks ORDER BY id
-        """)).mappings().all()
+        """)
+            )
+            .mappings()
+            .all()
+        )
         assert before_migration <= backfilled["created_at"] <= after_migration
         assert backfilled["due_date"] is None
         assert backfilled["is_completed"] is False
@@ -186,32 +198,49 @@ def test_legacy_data_upgrade_downgrade_and_reupgrade(postgres_schema, monkeypatc
         assert preserved["created_at"] == datetime(2020, 1, 2, 3, 4, 5)
         assert preserved["due_date"] == datetime(2020, 3, 4, 5, 6, 7)
 
-        defaults = connection.execute(text("""
+        defaults = connection.execute(
+            text("""
             INSERT INTO tasks (title, owner_id) VALUES ('Defaults', :owner_id)
             RETURNING created_at, is_completed, priority
-        """), {"owner_id": owner_id}).one()
-        utc_transaction_time = connection.execute(text(
-            "SELECT CURRENT_TIMESTAMP AT TIME ZONE 'UTC'"
-        )).scalar_one()
+        """),
+            {"owner_id": owner_id},
+        ).one()
+        utc_transaction_time = connection.execute(
+            text("SELECT CURRENT_TIMESTAMP AT TIME ZONE 'UTC'")
+        ).scalar_one()
         assert defaults.created_at == utc_transaction_time
         assert (defaults.is_completed, defaults.priority) == (False, 1)
-        assert "ix_tasks_owner_id" in {index["name"] for index in inspect(connection).get_indexes("tasks")}
+        assert "ix_tasks_owner_id" in {
+            index["name"] for index in inspect(connection).get_indexes("tasks")
+        }
 
     with migrated_api_client(engine, monkeypatch) as client:
         headers = auth(create_access_token({"sub": str(owner_id)}))
         response = client.get("/tasks/", headers=headers)
         assert response.status_code == 200
-        legacy = next(task for task in response.json()["data"] if task["title"] == "Legacy timestamp")
+        legacy = next(
+            task for task in response.json()["data"] if task["title"] == "Legacy timestamp"
+        )
         assert legacy["due_date"] == "2020-03-04T05:06:07"
         path = f"/tasks/{legacy['id']}"
-        assert client.put(path, json={"is_completed": True}, headers=headers).json()["data"]["due_date"] == legacy["due_date"]
-        assert client.put(path, json={"due_date": legacy["due_date"]}, headers=headers).status_code == 422
+        assert (
+            client.put(path, json={"is_completed": True}, headers=headers).json()["data"][
+                "due_date"
+            ]
+            == legacy["due_date"]
+        )
+        assert (
+            client.put(path, json={"due_date": legacy["due_date"]}, headers=headers).status_code
+            == 422
+        )
 
     migrate(url, "downgrade", INITIAL_REVISION)
     with engine.begin() as connection:
-        row = connection.execute(text("""
+        row = connection.execute(
+            text("""
             SELECT created_at, due_date FROM tasks WHERE title = 'Legacy timestamp'
-        """)).one()
+        """)
+        ).one()
         assert row.created_at == datetime(2020, 1, 2, 3, 4, 5)
         assert row.due_date == datetime(2020, 3, 4, 5, 6, 7)
         assert connection.execute(text("SELECT count(*) FROM tasks")).scalar_one() == 3
@@ -235,18 +264,24 @@ def test_new_deadlines_are_utc_and_block_lossy_downgrade(postgres_schema, monkey
         assert task["due_date"] == "2026-11-18T12:00:00Z"
         path = f"/tasks/{task['id']}"
         assert client.get(path, headers=headers).json()["data"]["due_date"] == task["due_date"]
-        assert client.put(path, json={"due_date": "2026-11-19T04:00:00Z"}, headers=headers).status_code == 200
+        assert (
+            client.put(path, json={"due_date": "2026-11-19T04:00:00Z"}, headers=headers).status_code
+            == 200
+        )
 
         result = migrate(url, "downgrade", INITIAL_REVISION, check=False)
         assert result.returncode != 0
         assert "Downgrade would discard timezone-aware deadlines" in result.stderr
         with engine.begin() as connection:
-            legacy, instant = connection.execute(text(
-                "SELECT due_date, due_date_instant FROM tasks"
-            )).one()
+            legacy, instant = connection.execute(
+                text("SELECT due_date, due_date_instant FROM tasks")
+            ).one()
             assert legacy is None
-            assert instant == datetime(2026, 11, 19, 4, tzinfo=timezone.utc)
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "ef72b89db261"
+            assert instant == datetime(2026, 11, 19, 4, tzinfo=UTC)
+            assert (
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                == "ef72b89db261"
+            )
 
         cleared = client.put(path, json={"due_date": None}, headers=headers)
         assert cleared.status_code == 200
@@ -263,7 +298,9 @@ def test_new_deadlines_are_utc_and_block_lossy_downgrade(postgres_schema, monkey
         ("x" * 151, True, "tasks.title exceeds the new length limit"),
     ],
 )
-def test_upgrade_rejects_ambiguous_legacy_data_without_changes(postgres_schema, title, has_owner, error):
+def test_upgrade_rejects_ambiguous_legacy_data_without_changes(
+    postgres_schema, title, has_owner, error
+):
     engine, url = postgres_schema
     migrate(url, "upgrade", INITIAL_REVISION)
     with engine.begin() as connection:
@@ -277,8 +314,14 @@ def test_upgrade_rejects_ambiguous_legacy_data_without_changes(postgres_schema, 
     assert result.returncode != 0
     assert error in result.stderr
     with engine.begin() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == INITIAL_REVISION
-        assert connection.execute(text("SELECT title, owner_id FROM tasks")).one() == (title, owner_id)
+        assert (
+            connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            == INITIAL_REVISION
+        )
+        assert connection.execute(text("SELECT title, owner_id FROM tasks")).one() == (
+            title,
+            owner_id,
+        )
 
 
 def test_concurrent_registration_returns_conflict(postgres_client):
@@ -300,8 +343,11 @@ def test_concurrent_registration_returns_conflict(postgres_client):
     assert sorted(response.status_code for response in responses) == [201, 409]
     rejected = next(response for response in responses if response.status_code == 409)
     assert rejected.json()["success"] is False
-    login = postgres_client.post("/auth/login", json={
-        "identifier": body["email"],
-        "password": body["password"],
-    })
+    login = postgres_client.post(
+        "/auth/login",
+        json={
+            "identifier": body["email"],
+            "password": body["password"],
+        },
+    )
     assert login.status_code == 200

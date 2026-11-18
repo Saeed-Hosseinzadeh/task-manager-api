@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +9,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
-
 from app.routers import auth, tasks
 from app.schemas import ErrorResponse, HealthResponse
 from app.utils.exceptions import (
@@ -37,19 +38,25 @@ if settings.ALLOWED_ORIGINS:
         allow_headers=["Authorization", "Content-Type"],
     )
 
-common_errors = {
+common_errors: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorResponse, "description": "Authentication required"},
     422: {"model": ErrorResponse, "description": "Input validation failed"},
     500: {"model": ErrorResponse, "description": "Server error"},
 }
-app.include_router(auth.router, responses={
-    **common_errors,
-    409: {"model": ErrorResponse, "description": "Username or email already registered"},
-})
-app.include_router(tasks.router, responses={
-    **common_errors,
-    404: {"model": ErrorResponse, "description": "Task not found"},
-})
+app.include_router(
+    auth.router,
+    responses={
+        **common_errors,
+        409: {"model": ErrorResponse, "description": "Username or email already registered"},
+    },
+)
+app.include_router(
+    tasks.router,
+    responses={
+        **common_errors,
+        404: {"model": ErrorResponse, "description": "Task not found"},
+    },
+)
 
 
 @app.get("/health", tags=["Health"], response_model=HealthResponse)

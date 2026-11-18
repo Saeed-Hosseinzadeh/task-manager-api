@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Annotated, Generic, Literal, Optional, TypeVar
+from datetime import UTC, datetime
+from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+)
 
 T = TypeVar("T")
 
@@ -54,8 +62,8 @@ class UserCreate(UserBase):
 
 
 class UserLogin(BaseModel):
-    identifier: str = Field(..., description="Username or email")
-    password: str = Field(..., min_length=6)
+    identifier: str = Field(..., min_length=1, max_length=320, description="Username or email")
+    password: str = Field(..., min_length=6, max_length=1024)
 
 
 class UserResponse(UserBase):
@@ -80,11 +88,13 @@ def parse_deadline(value: object) -> datetime:
         try:
             value = datetime.fromisoformat(value)
         except ValueError as error:
-            raise ValueError("A deadline must be an ISO 8601 datetime with a timezone offset") from error
+            raise ValueError(
+                "A deadline must be an ISO 8601 datetime with a timezone offset"
+            ) from error
     if not isinstance(value, datetime) or value.utcoffset() is None:
         raise ValueError("A deadline must be an ISO 8601 datetime with a timezone offset")
     try:
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
     except OverflowError as error:
         raise ValueError("The deadline is outside the representable UTC range") from error
 
@@ -95,10 +105,10 @@ Deadline = Annotated[AwareDatetime, BeforeValidator(parse_deadline)]
 # --- Task Base Schemas ---
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
+    description: str | None = Field(default=None, max_length=500)
     is_completed: bool = False
     priority: int = Field(default=1, ge=1, le=5)
-    due_date: Optional[datetime] = None
+    due_date: datetime | None = None
 
 
 class TaskCreate(TaskBase):
@@ -111,10 +121,10 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=3, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
-    is_completed: Optional[bool] = None
-    priority: Optional[int] = Field(default=None, ge=1, le=5)
+    title: str | None = Field(default=None, min_length=3, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    is_completed: bool | None = None
+    priority: int | None = Field(default=None, ge=1, le=5)
     due_date: Deadline | None = None
 
     @field_validator("title", "is_completed", "priority", mode="before")

@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.core.config import settings
 
@@ -14,7 +14,11 @@ def authorization(token: str) -> dict[str, str]:
 def tokens(client):
     response = client.post(
         "/auth/register",
-        json={"username": "jwt-user", "email": "jwt@example.testdomain.org", "password": "a-test-password"},
+        json={
+            "username": "jwt-user",
+            "email": "jwt@example.testdomain.org",
+            "password": "a-test-password",
+        },
     )
     assert response.status_code == 201
     return response.json()["data"]
@@ -55,7 +59,7 @@ def test_access_and_refresh_token_roles(client, tokens):
     ],
 )
 def test_invalid_token_claims_are_rejected_by_both_entry_points(client, tokens, case):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     claims = {"sub": str(tokens["id"]), "exp": int((now + timedelta(minutes=5)).timestamp())}
     signing_key = settings.SECRET_KEY
     if case == "expired":

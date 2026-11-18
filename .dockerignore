@@ -20,7 +20,6 @@
 !app/services/task_service.py
 !app/utils/__init__.py
 !app/utils/exceptions.py
-!app/utils/logger.py
 !app/utils/response.py
 !alembic/env.py
 !alembic/versions/9aa2a41540d5_initial_migration.py

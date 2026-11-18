@@ -1,34 +1,42 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    pbkdf2_sha256__min_rounds=600_000,
+    pbkdf2_sha256__default_rounds=600_000,
+)
 
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def verify_password(password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(password, hashed_password)
+def verify_password(password: str, hashed_password: str | None) -> tuple[bool, str | None]:
+    if hashed_password is None:
+        pwd_context.dummy_verify()
+        return False, None
+    return pwd_context.verify_and_update(password, hashed_password)
 
 
 def _create_token(data: dict[str, Any], expires_delta: timedelta, token_type: str) -> str:
     payload = data.copy()
-    payload["exp"] = datetime.now(timezone.utc) + expires_delta
+    payload["exp"] = datetime.now(UTC) + expires_delta
     payload["type"] = token_type
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def create_access_token(
     data: dict[str, Any],
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     expiration = expires_delta
     if expiration is None:
@@ -44,21 +52,19 @@ def create_refresh_token(data: dict[str, Any]) -> str:
     )
 
 
-def decode_token_subject(
-    token: str, *, expected_type: Literal["access", "refresh"]
-) -> int | None:
+def decode_token_subject(token: str, *, expected_type: Literal["access", "refresh"]) -> int | None:
     try:
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            options={"require_exp": True, "require_sub": True},
+            options={"require": ["exp", "sub"]},
         )
-    except (JWTError, TypeError, OverflowError):
+    except (InvalidTokenError, TypeError, OverflowError):
         return None
 
     expires_at = payload["exp"]
-    if type(expires_at) is not int or expires_at <= datetime.now(timezone.utc).timestamp():
+    if type(expires_at) is not int or expires_at <= datetime.now(UTC).timestamp():
         return None
     if payload.get("type") != expected_type:
         return None

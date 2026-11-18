@@ -45,6 +45,9 @@ def list_tasks(
     completed: bool | None = Query(default=None),
     sort_by: Literal["created_at", "title", "is_completed"] = Query(default="created_at"),
     sort_order: Literal["asc", "desc"] = Query(default="desc"),
+    priority: int | None = Query(default=None, ge=1, le=5),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=2_147_483_647),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -54,6 +57,9 @@ def list_tasks(
         completed=completed,
         sort_by=sort_by,
         sort_order=sort_order,
+        priority=priority,
+        limit=limit,
+        offset=offset,
     )
     return success_response(
         data=result,

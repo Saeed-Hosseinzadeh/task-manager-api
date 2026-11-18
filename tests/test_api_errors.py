@@ -1,5 +1,7 @@
 import pytest
+from passlib.hash import pbkdf2_sha256
 from sqlalchemy import delete
+from sqlalchemy.exc import OperationalError
 
 from app.models import User
 
@@ -79,3 +81,76 @@ def test_openapi_describes_bearer_and_validation_envelope(client):
     assert {"HTTPBearer": []} in operation["security"]
     schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/ErrorResponse"
+
+
+def test_invalid_login_has_generic_error(client, registered):
+    for identifier in (registered["email"], "unknown@example.org"):
+        response = client.post(
+            "/auth/login",
+            json={"identifier": identifier, "password": "incorrect-test-password"},
+        )
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
+        assert response.json() == {
+            "success": False,
+            "message": "Invalid credentials",
+            "data": None,
+        }
+
+
+def test_database_error_does_not_disclose_sql(client, db_session, registered, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OperationalError(
+            "synthetic SQL", {"value": "synthetic-private-value"}, RuntimeError()
+        )
+
+    monkeypatch.setattr(db_session, "query", fail)
+    headers = {"Authorization": f"Bearer {registered['access_token']}"}
+    response = client.get("/tasks/", headers=headers)
+    assert response.status_code == 500
+    assert response.json() == {
+        "success": False,
+        "message": "A database error occurred",
+        "data": None,
+    }
+
+
+def test_task_list_paginates_and_filters_with_stable_order(client, registered):
+    headers = {"Authorization": f"Bearer {registered['access_token']}"}
+    task_ids = []
+    for completed, priority in ((True, 3), (True, 3), (True, 2), (False, 3)):
+        response = client.post(
+            "/tasks/",
+            headers=headers,
+            json={"title": "Same title", "is_completed": completed, "priority": priority},
+        )
+        assert response.status_code == 201
+        task_ids.append(response.json()["data"]["id"])
+
+    params = {"completed": True, "priority": 3, "sort_by": "title", "limit": 1}
+    for offset, expected in enumerate(([task_ids[0]], [task_ids[1]], [])):
+        response = client.get("/tasks/", headers=headers, params={**params, "offset": offset})
+        assert response.status_code == 200
+        assert [task["id"] for task in response.json()["data"]] == expected
+
+    for field, value in (("limit", 0), ("limit", 101), ("offset", -1), ("priority", 6)):
+        assert_validation_error(
+            client.get("/tasks/", headers=headers, params={field: value}), field
+        )
+
+
+def test_login_upgrades_legacy_password_hash(client, db_session, registered):
+    user = db_session.get(User, registered["id"])
+    user.hashed_password = pbkdf2_sha256.using(rounds=29_000).hash("synthetic-test-password")
+    db_session.commit()
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "identifier": registered["email"],
+            "password": "synthetic-test-password",
+        },
+    )
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert pbkdf2_sha256.from_string(user.hashed_password).rounds == 600_000

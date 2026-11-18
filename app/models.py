@@ -1,9 +1,12 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
+
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, false, text
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql.functions import FunctionElement
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.functions import FunctionElement
+
 from app.database import Base
 
 
@@ -56,7 +59,7 @@ class Task(Base):
         Boolean, default=False, server_default=false(), nullable=False
     )
     priority: Mapped[int] = mapped_column(default=1, server_default=text("1"), nullable=False)
-    
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(),
         server_default=UTCWallTime(),
@@ -72,15 +75,15 @@ class Task(Base):
             return self.legacy_due_date
         # SQLite stores UTC instants without a timezone offset.
         if instant.tzinfo is None:
-            return instant.replace(tzinfo=timezone.utc)
-        return instant.astimezone(timezone.utc)
+            return instant.replace(tzinfo=UTC)
+        return instant.astimezone(UTC)
 
     @due_date.setter
     def due_date(self, value: datetime | None) -> None:
         if value is not None and value.utcoffset() is None:
             raise ValueError("A new deadline must include a timezone offset")
         self.legacy_due_date = None
-        self.due_date_instant = value.astimezone(timezone.utc) if value is not None else None
+        self.due_date_instant = value.astimezone(UTC) if value is not None else None
 
     # Foreign Keys & Relationships
     owner_id: Mapped[int] = mapped_column(
