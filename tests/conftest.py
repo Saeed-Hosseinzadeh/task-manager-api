@@ -20,7 +20,7 @@ TestingSessionLocal = sessionmaker(
     bind=engine,
 )
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def setup_database():
     """Create database tables once per test session."""
     Base.metadata.create_all(bind=engine)

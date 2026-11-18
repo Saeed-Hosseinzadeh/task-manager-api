@@ -51,7 +51,7 @@ def get_user_tasks(
     else:
         query = query.order_by(sort_column.asc())
 
-    return query.all()
+    return query.order_by(Task.id).all()
 
 
 def get_task_by_id(task_id: int, user_id: int, db: Session) -> Task:

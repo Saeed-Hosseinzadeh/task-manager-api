@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
@@ -41,8 +43,8 @@ def create(
 @router.get("/", response_model=TaskListResponse)
 def list_tasks(
     completed: bool | None = Query(default=None),
-    sort_by: str = Query(default="created_at"),
-    sort_order: str = Query(default="desc"),
+    sort_by: Literal["created_at", "title", "is_completed"] = Query(default="created_at"),
+    sort_order: Literal["asc", "desc"] = Query(default="desc"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:

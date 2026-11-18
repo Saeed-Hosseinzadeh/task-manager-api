@@ -1,6 +1,6 @@
 from typing import Literal
 from functools import lru_cache
-from pydantic import Field, PostgresDsn
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     """
     model_config = SettingsConfigDict(
         env_file=".env",
-        extra="ignore"
+        extra="ignore",
+        hide_input_in_errors=True
     )
 
     PROJECT_NAME: str = "Task Manager API"
@@ -22,12 +23,12 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str = Field(..., min_length=32)
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ALGORITHM: Literal["HS256"] = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, gt=0)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, gt=0)
 
     # CORS
-    ALLOWED_ORIGINS: list[str] = ["*"]
+    ALLOWED_ORIGINS: list[str] = Field(default_factory=list)
 
 @lru_cache
 def get_settings() -> Settings:

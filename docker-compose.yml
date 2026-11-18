@@ -1,44 +1,43 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:14
-    container_name: taskmanager_db
-    restart: always
     environment:
       POSTGRES_USER: fastapi_user
-      POSTGRES_PASSWORD: strongpassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: taskmanager_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fastapi_user"]
+      test: ["CMD", "pg_isready", "-U", "fastapi_user", "-d", "taskmanager_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  web:
+  migrate:
     build: .
-    container_name: taskmanager_api
-    restart: always
-    command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
-    ports:
-      - "8000:8000"
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://fastapi_user:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/taskmanager_db
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
+
+  web:
+    build: .
+    env_file: .env
     environment:
-      PYTHONPATH: /code
-    volumes:
-      - .:/code
+      DATABASE_URL: postgresql://fastapi_user:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/taskmanager_db
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   postgres_data:

@@ -1,292 +1,164 @@
 # Task Manager API
 
-A production-oriented task management API built with **FastAPI**, **SQLAlchemy 2.0**, and **Pydantic v2**.
+A FastAPI service for user-owned tasks. It uses Python 3.11, PostgreSQL,
+SQLAlchemy 2, Alembic, Pydantic 2, PBKDF2-SHA256 password hashing, and signed JWTs.
+Routers handle HTTP, services implement task and authentication workflows, and
+`app/database.py` manages a session per request. Database schema changes live in
+`alembic/versions/`.
 
-The project is structured around a clean service-oriented architecture with explicit separation between routing, business logic, persistence, validation, authentication, and infrastructure concerns. It provides user authentication, task management, consistent API responses, structured logging, and centralized exception handling in a codebase designed to stay maintainable as it grows.
+## Start with Docker Compose
 
----
+Install Docker with Linux containers, Compose v2, and Python 3.11 or newer for
+the secret-generation command. From the repository root, create a local
+`.env` if one does not already exist:
 
-## Features
-
-- Clean FastAPI application structure with focused modules and predictable responsibilities
-- Modern SQLAlchemy 2.0 model definitions using typed mappings
-- Pydantic v2 schemas for request validation and response serialization
-- JWT-based authentication with **access** and **refresh** tokens
-- Password hashing via **Passlib** using **PBKDF2-SHA256**
-- Reusable service layer for auth and task workflows
-- Consistent API response shape across endpoints
-- Centralized global exception handling for HTTP, validation, and database errors
-- Structured logging to both **console** and `logs/app.log`
-- Test-friendly design with clear dependency boundaries
-
----
-
-## Tech Stack
-
-- **Python 3.13**
-- **FastAPI**
-- **SQLAlchemy** (ORM)
-- **Pydantic v2**
-- **Passlib** with **PBKDF2-SHA256**
-- **python-jose** for JWT handling
-- **Uvicorn** for local development server
-
----
-
-## Project Structure
-
-```text
-task_manager_api/
-├── app/
-│   ├── core/
-│   │   ├── config.py
-│   │   └── security.py
-│   ├── routers/
-│   │   ├── auth.py
-│   │   └── tasks.py
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   └── task_service.py
-│   ├── utils/
-│   │   ├── exceptions.py
-│   │   ├── logger.py
-│   │   └── response.py
-│   ├── dependencies.py
-│   ├── main.py
-│   ├── models.py
-│   └── schemas.py
-├── tests/
-├── alembic/
-├── .env.example
-├── alembic.ini
-├── docker-compose.yml
-├── Dockerfile
-├── README.md
-└── requirements.txt
-```
-
----
-
-## Architecture Overview
-
-The application is organized around a small set of clear layers:
-
-- **Routers** define HTTP endpoints and request/response flow
-- **Services** contain business logic and keep route handlers thin
-- **Models** define database entities using SQLAlchemy 2.0 typed mappings
-- **Schemas** validate input and serialize output with Pydantic v2
-- **Dependencies** encapsulate shared FastAPI dependency logic such as authentication and database sessions
-- **Core** contains configuration and security primitives
-- **Utils** provide response formatting, logging, and exception handling
-
-This structure keeps framework details from bleeding into business logic and makes testing and refactoring straightforward.
-
----
-
-## Authentication
-
-Authentication is based on JWT tokens and follows a simple split:
-
-- **Access token** for authenticated API requests
-- **Refresh token** for obtaining a new access token without forcing the user to log in again
-
-Security-related behavior includes:
-
-- Password hashing with **PBKDF2-SHA256**
-- Token creation with explicit expiration
-- Token type validation (`access` vs `refresh`)
-- Current-user resolution through a dedicated FastAPI dependency
-
----
-
-## Logging and Error Handling
-
-The API includes centralized operational concerns out of the box:
-
-### Structured Logging
-
-- Logs are written to both:
-  - standard output
-  - `logs/app.log`
-- Uses a clean, production-friendly format suitable for local development and deployment environments
-
-### Global Exception Handling
-
-- HTTP errors are normalized into a consistent response structure
-- Request validation errors are returned with useful field-level details
-- SQLAlchemy exceptions are logged without leaking internal database details
-- Unhandled exceptions fall back to a safe internal server error response
-
----
-
-## API Response Shape
-
-The API uses a consistent response wrapper for both successful and failed operations.
-
-### Success response
-
-```json
-{
-  "success": true,
-  "message": "Task created successfully",
-  "data": {
-    "id": 1,
-    "title": "Write README",
-    "is_completed": false
-  }
+```powershell
+if (-not (Test-Path .env)) {
+    $jwt = python -c "import secrets; print(secrets.token_hex(32))"
+    $db = python -c "import secrets; print(secrets.token_hex(24))"
+    @("SECRET_KEY=$jwt", "POSTGRES_PASSWORD=$db") | Set-Content -Encoding ascii .env
 }
+docker compose up --build --wait --wait-timeout 120
+curl.exe --fail http://127.0.0.1:8000/health
 ```
 
-### Error response
+For a POSIX shell:
 
-```json
-{
-  "success": false,
-  "message": "Input validation failed",
-  "data": [
-    {
-      "field": "title",
-      "message": "Field required"
-    }
-  ]
-}
+```sh
+test ! -e .env && (
+  umask 077
+  jwt=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+  db=$(python3 -c "import secrets; print(secrets.token_hex(24))")
+  printf 'SECRET_KEY=%s\nPOSTGRES_PASSWORD=%s\n' "$jwt" "$db" > .env
+)
+docker compose up --build --wait --wait-timeout 120
+curl --fail http://127.0.0.1:8000/health
 ```
 
-This keeps client integration predictable and reduces ad hoc response formatting across endpoints.
+Compose starts PostgreSQL 14, runs Alembic in a one-shot service, and starts the
+web service after migration succeeds. The API binds to loopback on the host.
+Open Swagger UI at [localhost:8000/docs](http://127.0.0.1:8000/docs) or ReDoc at
+[localhost:8000/redoc](http://127.0.0.1:8000/redoc). Use `docker compose down`
+to stop the services and retain the database volume. An existing volume
+requires its initialized database password. Changing an environment variable
+does not change the password stored in PostgreSQL.
 
----
+## Run directly with Python
 
-## Setup and Installation
+Create a Python 3.11 virtual environment and install the requirements. Start a
+local PostgreSQL database and set `DATABASE_URL` to its connection URL. Set a
+random `SECRET_KEY` through your environment or a local copy of `.env.example`.
+Use a disposable database for development and testing.
 
-### 1. Clone the repository
-
-```bash
-git clone <your-repository-url>
-cd task_manager_api
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload
 ```
 
-### 2. Create and activate a virtual environment
+On a POSIX shell, create the environment with `python3.11 -m venv .venv`,
+activate it with `. .venv/bin/activate`, and run the same install, migration,
+and Uvicorn commands.
 
-```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-```
+| Setting | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL SQLAlchemy URL for direct runs. Compose supplies its internal URL using service host `db`. Percent-encode special characters in manually configured URLs. |
+| `SECRET_KEY` | Required signing key of at least 32 characters. Generate a random value and keep it private. |
+| `POSTGRES_PASSWORD` | Required by Compose. Use a hex string so it can be embedded in the Compose connection URL without escaping. |
+| `ALGORITHM` | Optional, fixed to `HS256`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Positive integer, default `60`. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | Positive integer, default `7`. |
+| `ALLOWED_ORIGINS` | JSON array of explicitly allowed frontend origins. Defaults to an empty list. |
+| `ENVIRONMENT` | `development`, `test`, or `production`. Defaults to `development`. |
 
-On Windows:
+Use HTTPS and rate limits for authentication routes at your deployment
+boundary. Keep database and JWT credentials outside Git. Application errors
+use console logging, and validation responses omit the input values.
 
-```bash
-.venv\Scripts\activate
-```
+## API and authentication
 
-### 3. Install dependencies
+| Method and path | Request or behavior |
+| --- | --- |
+| `POST /auth/register` | JSON with `username`, `email`, and `password`. Returns the account and both tokens. |
+| `POST /auth/login` | JSON with `identifier` (username or email) and `password`. Returns both tokens. |
+| `POST /auth/refresh` | JSON with `refresh_token`. Returns a new access token for an existing account. |
+| `POST /tasks/` | Creates a task for the authenticated user. `title` is required. |
+| `GET /tasks/` | Lists the caller’s tasks. Optional parameters are `completed`, `sort_by` (`created_at`, `title`, `is_completed`), and `sort_order` (`asc`, `desc`). |
+| `GET /tasks/{task_id}` | Returns a task owned by the caller. |
+| `PUT /tasks/{task_id}` | Applies only the submitted fields. Explicit null clears `description` or `due_date`. |
+| `DELETE /tasks/{task_id}` | Deletes a task owned by the caller. |
+| `GET /health` | Returns application liveness. Compose separately gates startup on PostgreSQL and a successful migration. |
 
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
+For task routes, send `Authorization: Bearer <access_token>`. Access tokens
+and refresh tokens have distinct roles. Refresh tokens are reusable until
+expiration while the account exists. Per-session rotation and revocation are
+outside the current API contract.
 
-### 4. Configure environment variables
-
-Create a `.env` file in the project root. Use `.env.example` as the starting point.
-
-Typical values include database connection settings, JWT secret configuration, and token expiration settings.
-
-### 5. Run the application
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at:
-
-- `http://127.0.0.1:8000`
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
-
----
-
-## Development Notes
-
-### Database
-
-The project uses SQLAlchemy as the ORM and is designed around modern typed model declarations. Depending on your current setup, you can point the application at SQLite for local development or another relational database via environment configuration.
-
-### Testing
-
-If test files are present, run them with:
-
-```bash
-pytest
-```
-
-### Health Check
-
-A simple health endpoint is exposed for service monitoring:
+Example authenticated request:
 
 ```http
-GET /health
+POST /tasks/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"title":"Review release","priority":2,"due_date":"2026-11-18T15:30:00+03:30"}
 ```
 
-Response:
+Successful responses have `success`, `message`, and `data` fields.
+The health response contains `"data":{"status":"ok"}`. Error responses use the
+same envelope with `success: false`. Invalid credentials return `401` with
+`WWW-Authenticate: Bearer`. Tasks outside the current user's ownership return
+`404`, duplicate registration returns `409`, and invalid inputs return
+`422` with field errors in `data`.
 
 ```json
-{
-  "status": "ok"
-}
+{"success":false,"message":"Input validation failed","data":[{"field":"title","message":"Field required"}]}
 ```
 
----
+## Migration and timestamp policy
 
-## API Modules
+Revision `ef72b89db261` preserves existing creation times and deadlines as
+stored. Missing and newly generated `created_at` values use a UTC wall-clock
+value in the existing timezone-free column. Missing completion and priority
+values become `false` and `1`. Existing email capacity is preserved.
 
-### Auth
+New or replaced deadlines require an ISO 8601 offset and are returned in UTC.
+A legacy deadline is returned without an offset because its timezone is
+unknown. Omitting a deadline on update preserves it. Downgrade retains
+backfilled values and refuses to drop the new deadline column while it contains
+data. Missing owners and overlength legacy values in narrowed fields must be
+resolved before upgrading.
 
-Authentication endpoints are responsible for:
+Before migrating an existing database, confirm the deployment history and
+inspect the schema. If an earlier draft of `ef72b89db261` was already applied,
+Alembic will see the same revision ID. A forward reconciliation revision
+must be designed against that database's actual schema and data provenance.
+For populated databases, rehearse the upgrade and schedule a low-traffic
+window. The revision holds exclusive locks on users and tasks until commit.
 
-- user registration
-- login
-- refresh token exchange
+## Verification
 
-### Tasks
+With test-only `DATABASE_URL` and `SECRET_KEY` configured:
 
-Task endpoints support:
+```sh
+python -m pip check
+python -m pytest -m "not postgresql"
+python -m pytest -m postgresql
+```
 
-- creating tasks
-- listing tasks
-- retrieving a single task
-- updating tasks
-- deleting tasks
+The first suite uses in-memory SQLite and ORM metadata. The second requires
+`POSTGRES_TEST_DATABASE_URL` pointing to a **disposable PostgreSQL database**
+whose test user can create and drop schemas. It creates a fresh schema and
+runs Alembic before executing API requests. CI runs both suites on PostgreSQL
+14 and 15 with Python 3.11. Direct dependencies are pinned in
+`requirements.txt`. Transitive dependencies are resolved at install time.
 
-Filtering and sorting behavior is handled in the service layer to keep route handlers concise.
-
----
-
-## Why This Structure Works
-
-This codebase is intentionally optimized for maintainability rather than cleverness.
-
-- Route handlers remain thin and readable
-- Business rules live in services
-- Validation rules live in schemas
-- Database concerns stay close to models and session dependencies
-- Operational concerns such as logging and exception handling are centralized
-
-That balance makes the project easy to reason about, extend, and test in a real production workflow.
-
----
-
-## Running in Production
-
-For production deployment:
-
-- run with a proper ASGI server process setup
-- replace permissive CORS settings with explicit allowed origins
-- provide a strong `SECRET_KEY`
-- configure environment variables explicitly
-- route logs to your platform’s aggregation stack if needed
-
----
+The image build context denies files by default. When adding runtime modules
+or migrations, update `.dockerignore`. The CI image job checks application
+files, tests exclusion with harmless sentinels, and smoke-tests Compose.
 
 ## License
 
-This project is distributed under the terms defined in the repository license.
+[MIT](LICENSE)

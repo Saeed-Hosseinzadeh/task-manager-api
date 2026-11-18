@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN adduser --disabled-password --gecos "" appuser
-COPY . /code
-RUN chown -R appuser:appuser /code
+COPY --chown=appuser:appuser app/ /code/app/
+COPY --chown=appuser:appuser alembic/ /code/alembic/
+COPY --chown=appuser:appuser alembic.ini /code/alembic.ini
 
 USER appuser
 

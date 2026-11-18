@@ -53,8 +53,9 @@ def login(
 @router.post("/refresh", response_model=RefreshResponse)
 def refresh(
     payload: RefreshTokenRequest,
+    db: Session = Depends(get_db),
 ) -> dict:
-    token_data = refresh_access_token(payload)
+    token_data = refresh_access_token(payload, db)
     return success_response(
         data=token_data,
         message="Token refreshed successfully",
