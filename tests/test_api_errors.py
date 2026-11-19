@@ -81,6 +81,67 @@ def test_openapi_describes_bearer_and_validation_envelope(client):
     assert {"HTTPBearer": []} in operation["security"]
     schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
     assert schema["$ref"] == "#/components/schemas/ErrorResponse"
+    assert "404" not in operation["responses"]
+    assert "400" in operation["responses"]
+    assert "404" in spec["paths"]["/tasks/{task_id}"]["get"]["responses"]
+    assert "409" in spec["paths"]["/auth/register"]["post"]["responses"]
+    assert "401" not in spec["paths"]["/auth/register"]["post"]["responses"]
+    assert "409" not in spec["paths"]["/auth/login"]["post"]["responses"]
+
+
+def test_database_text_validation(client, registered):
+    headers = {"Authorization": f"Bearer {registered['access_token']}"}
+    assert_validation_error(register(client, username="new\x00name"), "username")
+    login = client.post(
+        "/auth/login",
+        json={"identifier": "new\x00name", "password": "synthetic-test-password"},
+    )
+    assert_validation_error(login, "identifier")
+
+    body = {"title": "Valid title"}
+    created = client.post("/tasks/", headers=headers, json=body)
+    assert created.status_code == 201
+    task = created.json()["data"]
+    for field in ("title", "description"):
+        invalid_text = {field: "some\x00text"}
+        assert_validation_error(
+            client.post("/tasks/", headers=headers, json={**body, **invalid_text}), field
+        )
+        assert_validation_error(
+            client.put(f"/tasks/{task['id']}", headers=headers, json=invalid_text), field
+        )
+    assert client.get("/tasks/", headers=headers).json()["data"] == [task]
+
+
+def test_out_of_range_task_id_returns_not_found(client, registered, caplog):
+    headers = {"Authorization": f"Bearer {registered['access_token']}"}
+    path = "/tasks/9223372036854775808"
+    for response in (
+        client.get(path, headers=headers),
+        client.put(path, headers=headers, json={"title": "Valid title"}),
+        client.delete(path, headers=headers),
+    ):
+        assert response.status_code == 404
+        assert response.json()["message"] == "Task not found"
+    assert "9223372036854775808" not in caplog.text
+    assert "/tasks/{task_id}" in caplog.text
+
+
+def test_auth_responses_with_tokens_are_not_stored(client):
+    registration = register(client)
+    assert registration.status_code == 201
+    assert registration.headers["cache-control"] == "no-store"
+    login = client.post(
+        "/auth/login",
+        json={"identifier": "error-test", "password": "synthetic-test-password"},
+    )
+    assert login.status_code == 200
+    assert login.headers["cache-control"] == "no-store"
+    refresh = client.post(
+        "/auth/refresh", json={"refresh_token": login.json()["data"]["refresh_token"]}
+    )
+    assert refresh.status_code == 200
+    assert refresh.headers["cache-control"] == "no-store"
 
 
 def test_invalid_login_has_generic_error(client, registered):
@@ -96,6 +157,21 @@ def test_invalid_login_has_generic_error(client, registered):
             "message": "Invalid credentials",
             "data": None,
         }
+
+
+def test_login_with_unsupported_stored_hash_returns_generic_401(client, db_session, registered):
+    user = db_session.get(User, registered["id"])
+    user.hashed_password = "unsupported-stored-format"
+    db_session.commit()
+
+    response = client.post(
+        "/auth/login",
+        json={"identifier": registered["username"], "password": "synthetic-test-password"},
+    )
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["message"] == "Invalid credentials"
+    assert user.hashed_password == "unsupported-stored-format"
 
 
 def test_database_error_does_not_disclose_sql(client, db_session, registered, monkeypatch):

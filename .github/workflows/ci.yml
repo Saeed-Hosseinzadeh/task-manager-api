@@ -40,10 +40,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: "pip"
@@ -52,7 +54,10 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
 
       - name: Generate a test-only JWT key
-        run: printf 'SECRET_KEY=%s\n' "$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        run: |
+          key=$(openssl rand -hex 32)
+          printf '::add-mask::%s\n' "$key"
+          printf 'SECRET_KEY=%s\n' "$key" >> "$GITHUB_ENV"
 
       - name: Run fast SQLite tests
         run: python -m coverage run -m pytest -m "not postgresql"
@@ -66,12 +71,15 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: "pip"
       - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip check
       - run: ruff check app tests
       - run: ruff format --check app tests
       - run: python -m mypy app
@@ -79,7 +87,9 @@ jobs:
   docker-image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Build image from checkout
         run: docker build --tag task-manager-ci .
       - name: Rebuild with build-context sentinels
@@ -113,7 +123,10 @@ jobs:
       - name: Smoke-test Compose startup and migrations
         run: |
           umask 077
-          printf 'SECRET_KEY=%s\nPOSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > .env
+          key=$(openssl rand -hex 32)
+          password=$(openssl rand -hex 24)
+          printf '::add-mask::%s\n' "$key" "$password"
+          printf 'SECRET_KEY=%s\nPOSTGRES_PASSWORD=%s\n' "$key" "$password" > .env
           trap 'docker compose down --volumes; rm -f .env' EXIT
           docker compose up --build --wait --wait-timeout 120
           curl --fail --silent http://127.0.0.1:8000/health | python -c 'import json,sys; assert json.load(sys.stdin)["data"]["status"] == "ok"'

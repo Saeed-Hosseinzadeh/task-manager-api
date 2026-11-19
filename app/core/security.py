@@ -21,10 +21,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed_password: str | None) -> tuple[bool, str | None]:
-    if hashed_password is None:
-        pwd_context.dummy_verify()
-        return False, None
-    return pwd_context.verify_and_update(password, hashed_password)
+    if hashed_password is not None:
+        try:
+            return pwd_context.verify_and_update(password, hashed_password)
+        except ValueError:
+            # Passlib rejects unsupported schemes and malformed stored hashes.
+            pass
+    pwd_context.dummy_verify()
+    return False, None
 
 
 def _create_token(data: dict[str, Any], expires_delta: timedelta, token_type: str) -> str:

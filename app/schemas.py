@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Generic, Literal, TypeVar
 
 from pydantic import (
+    AfterValidator,
     AwareDatetime,
     BaseModel,
     BeforeValidator,
@@ -14,6 +15,15 @@ from pydantic import (
 )
 
 T = TypeVar("T")
+
+
+def reject_null_character(value: str) -> str:
+    if "\x00" in value:
+        raise ValueError("Text must not contain a null character")
+    return value
+
+
+DatabaseText = Annotated[str, AfterValidator(reject_null_character)]
 
 
 # --- Base Envelope Schema ---
@@ -39,6 +49,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    username: DatabaseText = Field(..., min_length=3, max_length=30)
     password: str = Field(..., min_length=6, max_length=50)
 
     @field_validator("username", mode="before")
@@ -62,7 +73,9 @@ class UserCreate(UserBase):
 
 
 class UserLogin(BaseModel):
-    identifier: str = Field(..., min_length=1, max_length=320, description="Username or email")
+    identifier: DatabaseText = Field(
+        ..., min_length=1, max_length=320, description="Username or email"
+    )
     password: str = Field(..., min_length=6, max_length=1024)
 
 
@@ -114,6 +127,9 @@ class TaskBase(BaseModel):
 class TaskCreate(TaskBase):
     due_date: Deadline | None = None
 
+    title: DatabaseText = Field(..., min_length=3, max_length=100)
+    description: DatabaseText | None = Field(default=None, max_length=500)
+
     @field_validator("title", mode="before")
     @classmethod
     def normalize_title(cls, value: object) -> object:
@@ -121,8 +137,8 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=3, max_length=100)
-    description: str | None = Field(default=None, max_length=500)
+    title: DatabaseText | None = Field(default=None, min_length=3, max_length=100)
+    description: DatabaseText | None = Field(default=None, max_length=500)
     is_completed: bool | None = None
     priority: int | None = Field(default=None, ge=1, le=5)
     due_date: Deadline | None = None

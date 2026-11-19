@@ -62,13 +62,14 @@ def get_user_tasks(
 
 
 def get_task_by_id(task_id: int, user_id: int, db: Session) -> Task:
-    task = db.query(Task).filter(Task.id == task_id, Task.owner_id == user_id).first()
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
-        )
-    return task
+    if -2_147_483_648 <= task_id <= 2_147_483_647:
+        task = db.query(Task).filter(Task.id == task_id, Task.owner_id == user_id).first()
+        if task is not None:
+            return task
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Task not found",
+    )
 
 
 def update_task(task_id: int, task_data: TaskUpdate, user_id: int, db: Session) -> Task:

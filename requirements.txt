@@ -5,7 +5,7 @@ uvicorn==0.46.0
 # Database & Migration
 SQLAlchemy==2.0.49
 alembic==1.13.1
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.13
 
 # Validation & Config
 pydantic==2.13.4

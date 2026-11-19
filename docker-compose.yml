@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:14
+    image: postgres:14.25
     environment:
       POSTGRES_USER: fastapi_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}

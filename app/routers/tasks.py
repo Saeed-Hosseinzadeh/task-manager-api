@@ -10,6 +10,7 @@ from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import (
     EmptyResponse,
+    ErrorResponse,
     TaskCreate,
     TaskDetailResponse,
     TaskListResponse,
@@ -24,10 +25,25 @@ from app.services.task_service import (
 )
 from app.utils.response import success_response
 
-router = APIRouter(prefix="/tasks", tags=["Tasks"])
+router = APIRouter(
+    prefix="/tasks",
+    tags=["Tasks"],
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+        422: {"model": ErrorResponse, "description": "Input validation failed"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+)
+task_not_found = {"model": ErrorResponse, "description": "Task not found"}
+constraint_violation = {"model": ErrorResponse, "description": "Database constraint violation"}
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=TaskDetailResponse)
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TaskDetailResponse,
+    responses={400: constraint_violation},
+)
 def create(
     task: TaskCreate,
     user: User = Depends(get_current_user),
@@ -67,7 +83,7 @@ def list_tasks(
     )
 
 
-@router.get("/{task_id}", response_model=TaskDetailResponse)
+@router.get("/{task_id}", response_model=TaskDetailResponse, responses={404: task_not_found})
 def get_task(
     task_id: int,
     user: User = Depends(get_current_user),
@@ -80,7 +96,11 @@ def get_task(
     )
 
 
-@router.put("/{task_id}", response_model=TaskDetailResponse)
+@router.put(
+    "/{task_id}",
+    response_model=TaskDetailResponse,
+    responses={400: constraint_violation, 404: task_not_found},
+)
 def update(
     task_id: int,
     task: TaskUpdate,
@@ -94,7 +114,11 @@ def update(
     )
 
 
-@router.delete("/{task_id}", response_model=EmptyResponse)
+@router.delete(
+    "/{task_id}",
+    response_model=EmptyResponse,
+    responses={400: constraint_violation, 404: task_not_found},
+)
 def delete_task_endpoint(
     task_id: int,
     user: User = Depends(get_current_user),

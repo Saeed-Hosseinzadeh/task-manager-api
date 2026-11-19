@@ -14,14 +14,15 @@ logger = logging.getLogger("uvicorn.error")
 
 
 def _request_path(request: Request) -> str:
-    return f"{request.method} {request.url.path}"
+    route = request.scope.get("route")
+    return f"{request.method} {getattr(route, 'path', '<unmatched>')}"
 
 
 async def http_exception_handler(
     request: Request,
     exc: StarletteHTTPException,
 ) -> JSONResponse:
-    logger.warning("HTTP %s on %s: %s", exc.status_code, _request_path(request), exc.detail)
+    logger.warning("HTTP %s on %s", exc.status_code, _request_path(request))
 
     return JSONResponse(
         status_code=exc.status_code,

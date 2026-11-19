@@ -92,14 +92,18 @@ docker compose up --build --wait --wait-timeout 120
 curl --fail http://127.0.0.1:8000/health
 ```
 
-Compose starts PostgreSQL 14, runs Alembic in a one-shot service, and starts the
-web service after migration succeeds. The API binds to loopback on the host. Set `HTTP_PORT` to run a separate
-Compose project alongside another local instance.
+Compose starts PostgreSQL 14.25, runs Alembic in a one-shot service, and starts
+the web service after migration succeeds. The API binds to loopback on the
+host. Set `HTTP_PORT` to run a separate Compose project alongside another local
+instance.
+
+If `.env` already exists from a direct Python setup, supply
+`POSTGRES_PASSWORD` before starting Compose. Generate one for a new database
+volume or use the existing database password for an initialized volume.
+
 Open Swagger UI at [localhost:8000/docs](http://127.0.0.1:8000/docs) or ReDoc at
 [localhost:8000/redoc](http://127.0.0.1:8000/redoc). Use `docker compose down`
-to stop the services and retain the database volume. An existing volume
-requires its initialized database password. Changing an environment variable
-does not change the password stored in PostgreSQL.
+to stop the services and retain the database volume.
 
 ## Run directly with Python
 
@@ -133,9 +137,12 @@ and Uvicorn commands.
 | `ENVIRONMENT` | `development`, `test`, or `production`. Defaults to `development`. |
 
 Passwords use PBKDF2-SHA256 with 600,000 iterations. Successful login upgrades
-older hashes when needed. Use HTTPS and rate limits on authentication routes
-at your deployment boundary. Keep database and JWT credentials outside Git. Application errors
+older PBKDF2-SHA256 hashes when needed. Accounts from early bcrypt-based
+revisions require an operator-managed password reset before they can sign in.
+Use HTTPS and rate limits on authentication routes at your deployment
+boundary. Keep database and JWT credentials outside Git. Application errors
 use console logging, and validation responses omit the input values.
+Successful token responses set `Cache-Control: no-store`.
 
 ## API and authentication
 
@@ -164,6 +171,11 @@ ID so pages have a deterministic order for unchanged data. Use
 `GET /tasks/?completed=false&priority=3&limit=20&offset=0` to fetch an example
 page. Offset pagination can shift when tasks change between requests.
 
+To run the requests in `test.http`, use an HTTP client that supports
+`.http` files. Store the returned tokens as `accessToken` and
+`refreshToken` in the client's private environment, and set `taskId` to
+the ID returned when you create a task.
+
 Example authenticated request:
 
 ```http
@@ -183,9 +195,10 @@ A successful create returns HTTP 201 and a response such as:
 Successful responses have `success`, `message`, and `data` fields.
 The health response contains `"data":{"status":"ok"}`. Error responses use the
 same envelope with `success: false`. Invalid credentials return `401` with
-`WWW-Authenticate: Bearer`. Tasks outside the current user's ownership return
-`404`, duplicate registration returns `409`, and invalid inputs return
-`422` with field errors in `data`.
+`WWW-Authenticate: Bearer`. Missing tasks and tasks owned by another user
+return `404`, duplicate registration returns `409`, and invalid inputs return
+`422` with field errors in `data`. Unmapped database constraint violations
+return a generic `400`.
 
 ```json
 {"success":false,"message":"Input validation failed","data":[{"field":"title","message":"Field required"}]}
@@ -211,10 +224,17 @@ Alembic will see the same revision ID. A forward reconciliation revision
 must be designed against that database's actual schema and data provenance.
 For populated databases, rehearse the upgrade and schedule a low-traffic
 window. The revision holds exclusive locks on users and tasks until commit.
+PostgreSQL 14 has reached end of life. Compose uses its final patch release
+for compatibility with existing local volumes. Review the
+[14.25 upgrade notes](https://www.postgresql.org/docs/release/14.25/) before
+starting Compose with a volume initialized by an older 14.x release. For
+public deployment, use a supported PostgreSQL major and plan a database
+upgrade before switching any existing PostgreSQL 14 volume.
 
 ## Verification
 
-With test-only `DATABASE_URL` and `SECRET_KEY` configured:
+With test-only `DATABASE_URL` and `SECRET_KEY` configured, for example
+`DATABASE_URL=sqlite:///:memory:` for the app configuration during tests:
 
 ```sh
 python -m pip install -r requirements-dev.txt
@@ -227,7 +247,8 @@ python -m coverage report
 python -m pytest -m postgresql
 ```
 
-The first suite uses in-memory SQLite and ORM metadata. The second requires
+The first suite uses a fresh in-memory SQLite database per test and ORM
+metadata. The second requires
 `POSTGRES_TEST_DATABASE_URL` pointing to a **disposable PostgreSQL database**
 whose test user can create and drop schemas. It creates a fresh schema and
 runs Alembic before executing API requests. CI runs both suites on PostgreSQL
